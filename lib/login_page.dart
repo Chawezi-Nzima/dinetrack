@@ -171,7 +171,7 @@ class _LoginPageState extends State<LoginPage> {
                         width: double.infinity,
                         child: OutlinedButton(
                           onPressed: () {
-                            // TODO: Add link to iOS/Android app
+
                           },
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
