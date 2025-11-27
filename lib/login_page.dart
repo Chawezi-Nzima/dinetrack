@@ -132,6 +132,7 @@ class _LoginPageState extends State<LoginPage> {
                         child: ElevatedButton(
                           onPressed: _busy ? null : _loginWithEmailPassword,
                           style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -144,7 +145,9 @@ class _LoginPageState extends State<LoginPage> {
                             "Login",
                             style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.bold),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white
+                            ),
                           ),
                         ),
                       ),
@@ -181,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text("Open App"),
+                          child: const Text("Download App"),
                         ),
                       ),
 
