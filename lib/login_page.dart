@@ -65,7 +65,7 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     Image.asset(
                       'assets/images/logo.png', // replace with your logo pic
-                      height: 120,
+                      height: 160,
                     ),
                     const SizedBox(height: 8),
                     const Text(
