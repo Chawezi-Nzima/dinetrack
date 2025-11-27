@@ -139,7 +139,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           child: _busy
                               ? const CircularProgressIndicator(
-                              color: Colors.blue)
+                              color: Colors.white)
                               : const Text(
                             "Login",
                             style: TextStyle(
