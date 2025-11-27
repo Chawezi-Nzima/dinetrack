@@ -1,0 +1,24 @@
+{
+  "name": "dinetack-functions",
+  "scripts": {
+    "build": "tsc",
+    "serve": "firebase emulators:start --only functions,firestore",
+    "deploy": "firebase deploy --only functions,firestore:rules",
+    "lint": "eslint --ext .ts src"
+  },
+  "engineStrict": true,
+  "engines": {
+    "node": "18"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^11.10.1",
+    "firebase-functions": "^4.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "eslint": "^8.52.0",
+    "@typescript-eslint/parser": "^6.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.10.0"
+  }
+}
