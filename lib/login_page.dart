@@ -169,7 +169,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 10),
 
-                      /// OPEN APP (App Store / Play Store Link)
+                      /*// OPEN APP (App Store / Play Store Link)
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
@@ -186,7 +186,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           child: const Text("Download App"),
                         ),
-                      ),
+                      ),*/
 
                       /// ERROR MESSAGE
                       if (_errorMessage != null) ...[
