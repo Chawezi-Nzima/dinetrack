@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper to check authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper to get role claim
+    function role() {
+      return request.auth.token.role;
+    }
+
+    // Users collection: users can read/write their own profile; supervisors can read all
+    match /users/{uid} {
+      allow read: if isAuthenticated() && (request.auth.uid == uid || role() == 'supervisor');
+      allow write: if isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // Establishments: operators (owner) can create/update their establishments; supervisor can create/approve
+    match /establishments/{estId} {
+      allow create: if isAuthenticated() && (role() == 'supervisor' || role() == 'operator');
+      allow read: if true; // public listing allowed
+      allow update: if isAuthenticated() && (
+          // owner operator or supervisor
+          resource.data.ownerId == request.auth.uid || role() == 'supervisor'
+      );
+      allow delete: if isAuthenticated() && role() == 'supervisor';
+    }
+
+    // Establishment-scoped collections (menu, tables, orders)
+    match /establishments/{estId}/{subCollection}/{docId} {
+      allow read: if true; // menu/tables/orders may be public depending on subCollection
+      allow create, update, delete: if isAuthenticated() && (
+        role() == 'supervisor' ||
+        // operator owner can manage
+        exists(/databases/$(database)/documents/establishments/$(estId)) &&
+        get(/databases/$(database)/documents/establishments/$(estId)).data.ownerId == request.auth.uid
+      );
+    }
+
+    // Orders: customers can create orders; staff/kitchen/operator read orders for their establishment
+    match /establishments/{estId}/orders/{orderId} {
+      allow create: if isAuthenticated() && role() == 'customer';
+      allow read: if isAuthenticated() && (
+         // operator or staff/kitchen or the customer who placed it
+         role() == 'supervisor' ||
+         role() == 'operator' ||
+         role() == 'kitchen' ||
+         request.auth.uid == resource.data.customerId
+      );
+      allow update: if isAuthenticated() && (
+         role() == 'operator' || role() == 'kitchen' || request.auth.uid == resource.data.customerId
+      );
+    }
+
+    // Payments: only server functions or customer can create payment records (validate via Cloud Functions)
+    match /payments/{paymentId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && (role() == 'supervisor' || request.auth.uid == resource.data.customerId);
+      allow update: if false; // prefer server-side update
+    }
+
+    // Dinecoin ledger: readable only by supervisor & target owner
+    match /dinecoin_ledger/{ledgerId} {
+      allow read: if isAuthenticated() && (role() == 'supervisor' || request.auth.uid == resource.data.targetId);
+      allow create: if isAuthenticated() && role() == 'supervisor';
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
