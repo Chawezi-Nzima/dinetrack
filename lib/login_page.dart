@@ -1,5 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'core/services/supabase_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -21,12 +23,15 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      await SupabaseService().client.auth.signInWithPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-    } on FirebaseAuthException catch (e) {
-      setState(() => _errorMessage = e.message ?? 'Login failed');
+      // Login successful - AuthGate in main.dart will handle routing
+    } on AuthException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } catch (e) {
+      setState(() => _errorMessage = 'Login failed: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -39,9 +44,46 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      await FirebaseAuth.instance.signInAnonymously();
+      // Use predefined guest account
+      await SupabaseService().client.auth.signInWithPassword(
+        email: 'guest@dinetrack.com',
+        password: 'guest123456',
+      );
+    } on AuthException catch (e) {
+      setState(() => _errorMessage = 'Failed to login as guest: ${e.message}');
     } catch (e) {
       setState(() => _errorMessage = 'Failed to login as guest: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  // Optional sign up method
+  Future<void> _signUp() async {
+    setState(() {
+      _busy = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final response = await SupabaseService().client.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        data: {
+          'user_type': 'customer', // Default role for new signups
+          'full_name': '', // Can be updated later
+        },
+      );
+
+      if (response.user != null) {
+        setState(() => _errorMessage = 'Account created successfully! You can now login.');
+      } else {
+        setState(() => _errorMessage = 'Check your email to verify your account.');
+      }
+    } on AuthException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } catch (e) {
+      setState(() => _errorMessage = 'Sign up failed: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -64,7 +106,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   children: [
                     Image.asset(
-                      'assets/images/logo.png', // replace with your logo pic
+                      'assets/images/logo.png',
                       height: 160,
                     ),
                     const SizedBox(height: 8),
@@ -151,9 +193,23 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 10),
 
-
+                      /// SIGN UP BUTTON
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _busy ? null : _signUp,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text("Create Account"),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
 
                       /// LOGIN AS GUEST
                       SizedBox(
@@ -169,26 +225,6 @@ class _LoginPageState extends State<LoginPage> {
                           child: const Text("Login as Guest"),
                         ),
                       ),
-                      const SizedBox(height: 10),
-
-                      /*// OPEN APP (App Store / Play Store Link)
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () {
-
-                          },
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            side:
-                            BorderSide(color: Colors.grey.shade500),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text("Download App"),
-                        ),
-                      ),*/
 
                       /// ERROR MESSAGE
                       if (_errorMessage != null) ...[
@@ -204,10 +240,30 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
               ),
+
+              /// ADDITIONAL INFO
+              const Padding(
+                padding: EdgeInsets.only(top: 20),
+                child: Text(
+                  "Contact administrator for operator/supervisor accounts",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
