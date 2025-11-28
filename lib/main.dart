@@ -17,6 +17,11 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  FirebaseAuth.instance.useAuthEmulator('127.0.0.1', 9099);
+  // Firestore emulator
+  FirebaseFirestore.instance.useFirestoreEmulator('127.0.0.1', 8080);
+
   runApp(const DineTrackApp());
 }
 

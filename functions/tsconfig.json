@@ -8,7 +8,9 @@
     "esModuleInterop": true,
     "moduleResolution": "node",
     "outDir": "lib",
-    "rootDir": "src"
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "noEmitOnError": false
   },
   "include": ["src"]
 }

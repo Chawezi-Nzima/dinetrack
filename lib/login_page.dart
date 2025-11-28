@@ -96,7 +96,7 @@ class _LoginPageState extends State<LoginPage> {
                         style: TextStyle(
                             fontSize: 20, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 25),
 
                       /// EMAIL FIELD
                       TextField(
@@ -110,7 +110,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         keyboardType: TextInputType.emailAddress,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
 
                       /// PASSWORD FIELD
                       TextField(
@@ -124,7 +124,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         obscureText: true,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 15),
 
                       /// LOGIN BUTTON
                       SizedBox(
@@ -151,7 +151,9 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 20),
+
+
 
                       /// LOGIN AS GUEST
                       SizedBox(
