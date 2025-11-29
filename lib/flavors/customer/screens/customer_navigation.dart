@@ -55,9 +55,11 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
       });
     } else {
       final defaultTableId = await _getDefaultTableId();
-      setState(() {
-        _resolvedTableId = defaultTableId;
-      });
+      if (mounted) {
+        setState(() {
+          _resolvedTableId = defaultTableId;
+        });
+      }
     }
   }
 
@@ -144,22 +146,26 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
   // Enhanced checkout method with DineCoins support
   Future<void> _checkout({String paymentMethod = 'cash', double dineCoinsUsed = 0.0}) async {
     if (_resolvedTableId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to determine table. Please scan QR code again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to determine table. Please scan QR code again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return;
     }
 
     if (_cartItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Your cart is empty.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Your cart is empty.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
     }
 
@@ -227,16 +233,18 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
       }
 
       // 5. Clear cart and show success
-      _clearCart();
+      if (mounted) {
+        _clearCart();
 
-      // 6. Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order #${orderId.substring(0, 8)} placed successfully!'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 5),
-        ),
-      );
+        // 6. Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order #${orderId.substring(0, 8)} placed successfully!'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
 
       debugPrint('Checkout completed for table: $_resolvedTableId');
       debugPrint('Order ID: $orderId');
@@ -245,12 +253,14 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
       debugPrint('Final amount: $finalAmount');
 
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Checkout failed: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Checkout failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       debugPrint('Checkout error: $e');
     }
   }
@@ -299,34 +309,41 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
     // Ensure we have a table ID before proceeding
     if (_resolvedTableId == null) {
       await _resolveTableId();
+      if (!mounted) return; // Check if widget is still mounted
     }
 
     if (_cartItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Your cart is empty.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Your cart is empty.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
     }
 
     // Get DineCoins balance for payment options
     final dineCoinsBalance = await _getDineCoinsBalance();
+    if (!mounted) return; // Check if widget is still mounted
+
     final canUseDineCoins = dineCoinsBalance > 0;
 
     // Show enhanced confirmation dialog with payment options
-    showDialog(
-      context: context,
-      builder: (context) => CheckoutDialog(
-        tableId: _resolvedTableId,
-        cartItems: _cartItems,
-        cartTotal: _cartTotal,
-        dineCoinsBalance: dineCoinsBalance,
-        canUseDineCoins: canUseDineCoins,
-        onCheckout: _checkout,
-      ),
-    );
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => CheckoutDialog(
+          tableId: _resolvedTableId,
+          cartItems: _cartItems,
+          cartTotal: _cartTotal,
+          dineCoinsBalance: dineCoinsBalance,
+          canUseDineCoins: canUseDineCoins,
+          onCheckout: _checkout,
+        ),
+      );
+    }
   }
 
   @override
@@ -367,7 +384,7 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: Colors.black.withValues(alpha:0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -552,35 +569,36 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                 'Payment Method',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              Row(
-                children: [
-                  Radio<String>(
+              const SizedBox(height: 8),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment<String>(
                     value: 'cash',
-                    groupValue: _selectedPaymentMethod,
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedPaymentMethod = value!;
-                      });
-                    },
+                    label: Text('Cash'),
+                    icon: Icon(Icons.attach_money),
                   ),
-                  const Text('Cash'),
-                  const SizedBox(width: 20),
-                  Radio<String>(
+                  ButtonSegment<String>(
                     value: 'dine_coins',
-                    groupValue: _selectedPaymentMethod,
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedPaymentMethod = value!;
-                      });
-                    },
+                    label: Text('DineCoins'),
+                    icon: Icon(Icons.account_balance_wallet),
                   ),
-                  const Text('DineCoins'),
                 ],
+                selected: {_selectedPaymentMethod},
+                onSelectionChanged: (Set<String> newSelection) {
+                  setState(() {
+                    _selectedPaymentMethod = newSelection.first;
+                  });
+                },
+                style: SegmentedButton.styleFrom(
+                  backgroundColor: Colors.grey[100],
+                  selectedBackgroundColor: const Color(0xFF53B175),
+                  selectedForegroundColor: Colors.white,
+                ),
               ),
             ],
 
             if (_selectedPaymentMethod == 'dine_coins') ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               Text('Available DineCoins: ${widget.dineCoinsBalance.toStringAsFixed(0)}'),
               const SizedBox(height: 8),
               TextField(
@@ -589,6 +607,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
                   labelText: 'DineCoins to use',
                   border: OutlineInputBorder(),
                   hintText: 'Enter amount',
+                  prefixIcon: Icon(Icons.account_balance_wallet),
                 ),
                 keyboardType: TextInputType.number,
                 onChanged: _updateDineCoinsUsed,
@@ -602,12 +621,31 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
             ],
 
             if (_selectedPaymentMethod == 'dine_coins' && _dineCoinsUsed > 0) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Final Amount to Pay: ${_finalAmount.toStringAsFixed(0)} MWK',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF53B175),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF53B175).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Final Amount to Pay:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '${_finalAmount.toStringAsFixed(0)} MWK',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF53B175),
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -635,6 +673,7 @@ class _CheckoutDialogState extends State<CheckoutDialog> {
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF53B175),
+            foregroundColor: Colors.white,
           ),
           child: const Text('Place Order'),
         ),

@@ -5,7 +5,7 @@ import 'item_detail_screen.dart';
 
 class MenuScreen extends StatefulWidget {
   final String establishmentId;
-  final Function(MenuItem, int) onAddToCart;
+  final Function(MenuItem, {int quantity}) onAddToCart;
   final int cartItemCount;
 
   const MenuScreen({
@@ -20,17 +20,25 @@ class MenuScreen extends StatefulWidget {
 }
 
 class _MenuScreenState extends State<MenuScreen> {
-  final SupabaseService _svc = SupabaseService();
-  List<MenuItem> _items = [];
+  final SupabaseService _supabaseService = SupabaseService();
+  final Color _primaryGreen = const Color(0xFF53B175);
+  final Color _lightGrey = const Color(0xFFF2F3F2);
+  final Color _darkGrey = const Color(0xFF7C7C7C);
+
+  List<AppCategory> _categories = [];
+  Map<String, List<MenuItem>> _menuItemsByCategory = {};
+  String _selectedCategoryId = '';
   bool _loading = true;
+  String _error = '';
+
   final TextEditingController _searchController = TextEditingController();
-  List<MenuItem> _filteredItems = [];
-  String _searchQuery = '';
+  List<MenuItem> _searchResults = [];
+  bool _isSearching = false;
 
   @override
   void initState() {
     super.initState();
-    _loadItems();
+    _loadData();
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -41,84 +49,89 @@ class _MenuScreenState extends State<MenuScreen> {
     super.dispose();
   }
 
-  Future<void> _loadItems() async {
-    setState(() => _loading = true);
+  Future<void> _loadData() async {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+
     try {
-      // Use getCategories and get menu items from categories, or use getAllMenuItems if available
-      final categories = await _svc.getCategories();
-      // For now, let's use a method that exists - you'll need to implement proper menu item fetching
-      final items = await _getAllMenuItems();
+      // Load categories
+      final categories = await _supabaseService.getCategories(establishmentId: widget.establishmentId);
+
+      // Load all menu items
+      final allItems = await _supabaseService.getMenuItemsByEstablishment(widget.establishmentId);
+
+      // Group items by category
+      final Map<String, List<MenuItem>> groupedItems = {};
+      for (final item in allItems) {
+        if (!groupedItems.containsKey(item.categoryId)) {
+          groupedItems[item.categoryId] = [];
+        }
+        groupedItems[item.categoryId]!.add(item);
+      }
+
       setState(() {
-        _items = items;
-        _filteredItems = items;
+        _categories = categories;
+        _menuItemsByCategory = groupedItems;
+        _selectedCategoryId = categories.isNotEmpty ? categories.first.id : '';
         _loading = false;
       });
     } catch (e) {
-      debugPrint("Error loading items: $e");
-      setState(() => _loading = false);
-    }
-  }
-
-  // Temporary method - you'll need to implement proper menu item fetching in SupabaseService
-  Future<List<MenuItem>> _getAllMenuItems() async {
-    // This is a placeholder - implement proper menu item fetching in your SupabaseService
-    try {
-      // Try using existing methods or implement a new one
-      final bestsellers = await _svc.getBestsellers();
-      final recommended = await _svc.getRecommended();
-
-      // Combine and remove duplicates
-      final allItems = <MenuItem>[];
-      final seenIds = <String>{};
-
-      for (final item in bestsellers) {
-        if (!seenIds.contains(item.id)) {
-          allItems.add(item);
-          seenIds.add(item.id);
-        }
-      }
-
-      for (final item in recommended) {
-        if (!seenIds.contains(item.id)) {
-          allItems.add(item);
-          seenIds.add(item.id);
-        }
-      }
-
-      return allItems;
-    } catch (e) {
-      debugPrint("Error getting menu items: $e");
-      return [];
+      setState(() {
+        _error = 'Failed to load menu: $e';
+        _loading = false;
+      });
     }
   }
 
   void _onSearchChanged() {
     final query = _searchController.text.trim().toLowerCase();
     setState(() {
-      _searchQuery = query;
-      if (query.isEmpty) {
-        _filteredItems = _items;
-      } else {
-        _filteredItems = _items.where((item) =>
-        item.name.toLowerCase().contains(query) ||
-            (item.description?.toLowerCase().contains(query) ?? false)).toList();
-      }
+      _isSearching = query.isNotEmpty;
+    });
+
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+      });
+      return;
+    }
+
+    // Search through all menu items
+    final allItems = _menuItemsByCategory.values.expand((list) => list).toList();
+    final results = allItems.where((item) =>
+    item.name.toLowerCase().contains(query) ||
+        (item.description?.toLowerCase().contains(query) ?? false)
+    ).toList();
+
+    setState(() {
+      _searchResults = results;
     });
   }
 
   void _clearSearch() {
     setState(() {
       _searchController.clear();
-      _searchQuery = '';
-      _filteredItems = _items;
+      _isSearching = false;
+      _searchResults = [];
     });
   }
 
-  void _refreshItems() {
-    setState(() {
-      _loading = true;
-    });
-    _loadItems();
+  Future<void> _refreshData() async {
+    await _loadData();
+  }
+
+  List<MenuItem> get _currentItems {
+    if (_isSearching) {
+      return _searchResults;
+    }
+    return _menuItemsByCategory[_selectedCategoryId] ?? [];
+  }
+
+  // Helper method to adapt the function signature for ItemDetailScreen
+  void _onAddToCartForDetail(MenuItem item, int quantity) {
+    widget.onAddToCart(item, quantity: quantity);
   }
 
   @override
@@ -126,20 +139,22 @@ class _MenuScreenState extends State<MenuScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
         title: const Text(
-            'Find Products',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)
+          'Menu',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
+        backgroundColor: _primaryGreen,
+        foregroundColor: Colors.white,
         actions: [
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.shopping_cart, color: Colors.black),
+                icon: const Icon(Icons.shopping_cart),
                 onPressed: () {
-                  // TODO: Navigate to cart screen or show cart dialog
+                  // TODO: Navigate to cart screen
                 },
               ),
               if (widget.cartItemCount > 0)
@@ -171,119 +186,245 @@ class _MenuScreenState extends State<MenuScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF2F3F2),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search Store',
-                  prefixIcon: const Icon(Icons.search, color: Colors.black54),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                    icon: const Icon(Icons.close, color: Colors.black54),
-                    onPressed: _clearSearch,
-                  )
-                      : null,
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.all(15),
-                ),
-              ),
-            ),
-          ),
+      body: _loading
+          ? _buildLoadingState()
+          : _error.isNotEmpty
+          ? _buildErrorState()
+          : _buildMainContent(),
+    );
+  }
 
-          // Grid Content
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF53B175)))
-                : _filteredItems.isEmpty
-                ? _buildEmptyState()
-                : RefreshIndicator(
-              onRefresh: () async {
-                _refreshItems();
-                await Future.delayed(const Duration(seconds: 1));
-              },
-              child: GridView.builder(
-                padding: const EdgeInsets.all(15),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.75,
-                  crossAxisSpacing: 15,
-                  mainAxisSpacing: 15,
-                ),
-                itemCount: _filteredItems.length,
-                itemBuilder: (context, index) {
-                  final item = _filteredItems[index];
-                  return _buildProductCard(item);
-                },
-              ),
-            ),
-          ),
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Loading menu...'),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildErrorState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            _searchQuery.isNotEmpty ? Icons.search_off : Icons.fastfood_outlined,
-            size: 64,
-            color: Colors.grey,
-          ),
+          const Icon(Icons.error_outline, size: 64, color: Colors.grey),
           const SizedBox(height: 16),
           Text(
-            _searchQuery.isNotEmpty ? 'No items found' : 'No menu items available',
-            style: const TextStyle(fontSize: 18, color: Colors.grey),
+            'Failed to load menu',
+            style: TextStyle(fontSize: 18, color: _darkGrey),
           ),
           const SizedBox(height: 8),
           Text(
-            _searchQuery.isNotEmpty
-                ? 'Try a different search term'
-                : 'Check back later for new items',
-            style: const TextStyle(fontSize: 14, color: Colors.grey),
+            _error,
+            style: TextStyle(fontSize: 14, color: _darkGrey),
+            textAlign: TextAlign.center,
           ),
-          if (_searchQuery.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _clearSearch,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF53B175),
-              ),
-              child: const Text(
-                'Clear Search',
-                style: TextStyle(color: Colors.white),
-              ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadData,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryGreen,
+              foregroundColor: Colors.white,
             ),
-          ],
+            child: const Text('Try Again'),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildProductCard(MenuItem item) {
-    final imageUrl = item.imageUrl ?? 'https://via.placeholder.com/150';
+  Widget _buildMainContent() {
+    return Column(
+      children: [
+        // Search Bar
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: _lightGrey,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search menu items...',
+                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                suffixIcon: _isSearching
+                    ? IconButton(
+                  icon: const Icon(Icons.close, color: Colors.grey),
+                  onPressed: _clearSearch,
+                )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ),
+        ),
 
+        if (_isSearching) ..._buildSearchContent(),
+        if (!_isSearching) ..._buildCategoryContent(),
+      ],
+    );
+  }
+
+  List<Widget> _buildSearchContent() {
+    return [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Search Results (${_searchResults.length})',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextButton(
+              onPressed: _clearSearch,
+              child: const Text('Clear'),
+            ),
+          ],
+        ),
+      ),
+      Expanded(
+        child: _searchResults.isEmpty
+            ? _buildEmptySearchState()
+            : _buildMenuItemsGrid(_searchResults),
+      ),
+    ];
+  }
+
+  List<Widget> _buildCategoryContent() {
+    return [
+      // Categories Row (Horizontal Scroll)
+      SizedBox(
+        height: 100,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: _categories.length,
+          itemBuilder: (context, index) {
+            final category = _categories[index];
+            return _buildCategoryItem(category);
+          },
+        ),
+      ),
+      const SizedBox(height: 8),
+      // Selected Category Title
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Text(
+              _categories.firstWhere((cat) => cat.id == _selectedCategoryId, orElse: () => _categories.first).name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '${_currentItems.length} items',
+              style: TextStyle(color: _darkGrey),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      // Menu Items Grid
+      Expanded(
+        child: _currentItems.isEmpty
+            ? _buildEmptyCategoryState()
+            : RefreshIndicator(
+          onRefresh: _refreshData,
+          child: _buildMenuItemsGrid(_currentItems),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildCategoryItem(AppCategory category) {
+    final isSelected = _selectedCategoryId == category.id;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedCategoryId = category.id;
+        });
+      },
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? _primaryGreen : _lightGrey,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? _primaryGreen : Colors.transparent,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _getIconForCategory(category.name),
+              color: isSelected ? Colors.white : _darkGrey,
+              size: 24,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              category.name,
+              style: TextStyle(
+                color: isSelected ? Colors.white : _darkGrey,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuItemsGrid(List<MenuItem> items) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 0.75,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return _buildMenuItemCard(item);
+      },
+    );
+  }
+
+  Widget _buildMenuItemCard(MenuItem item) {
     return GestureDetector(
       onTap: () => _navigateToItemDetail(context, item),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -292,91 +433,121 @@ class _MenuScreenState extends State<MenuScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product Image
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2F3F2),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(18),
-                    topRight: Radius.circular(18),
+            // Item image with bestseller badge
+            Stack(
+              children: [
+                Container(
+                  height: 120,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: _lightGrey,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+                      ? ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                    child: Image.network(
+                      item.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Icon(Icons.fastfood, color: _darkGrey, size: 40),
+                        );
+                      },
+                    ),
+                  )
+                      : Center(
+                    child: Icon(Icons.fastfood, color: _darkGrey, size: 40),
                   ),
                 ),
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(18),
-                    topRight: Radius.circular(18),
+                if (item.isBestseller)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _primaryGreen,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'BEST',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ),
-                  child: Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Center(
-                        child: Icon(Icons.fastfood, size: 40, color: Colors.grey),
-                      );
-                    },
-                  ),
-                ),
-              ),
+              ],
             ),
 
-            // Product Details
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.black,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.description ?? "Fresh and delicious",
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 14,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        item.formattedPrice,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: Colors.black,
-                        ),
+            // Item details
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Colors.black,
                       ),
-                      InkWell(
-                        onTap: () => widget.onAddToCart(item, 1),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF53B175),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.add,
-                            color: Colors.white,
-                            size: 20,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.description ?? "Fresh and delicious",
+                      style: TextStyle(
+                        color: _darkGrey,
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          item.formattedPrice,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: _primaryGreen,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        InkWell(
+                          onTap: () => widget.onAddToCart(item, quantity: 1),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: _primaryGreen,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.add,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -385,13 +556,91 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
+  Widget _buildEmptySearchState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.search_off, size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          const Text(
+            'No items found',
+            style: TextStyle(fontSize: 18, color: Colors.grey),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try a different search term',
+            style: TextStyle(fontSize: 14, color: _darkGrey),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _clearSearch,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Clear Search'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyCategoryState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.fastfood_outlined, size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          const Text(
+            'No items in this category',
+            style: TextStyle(fontSize: 18, color: Colors.grey),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Check back later for new items',
+            style: TextStyle(fontSize: 14, color: _darkGrey),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _navigateToItemDetail(BuildContext context, MenuItem item) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ItemDetailScreen(
-        item: item, // Pass MenuItem directly
-        onAddToCart: widget.onAddToCart, // Pass the onAddToCart function
-      )),
+      MaterialPageRoute(
+        builder: (_) => ItemDetailScreen(
+          item: item,
+          onAddToCart: _onAddToCartForDetail, // Use the adapted function
+        ),
+      ),
     );
+  }
+
+  IconData _getIconForCategory(String categoryName) {
+    switch (categoryName.toLowerCase()) {
+      case 'meals':
+        return Icons.lunch_dining;
+      case 'drinks':
+        return Icons.local_drink;
+      case 'desserts':
+        return Icons.cake;
+      case 'snacks':
+        return Icons.fastfood;
+      case 'appetizers':
+        return Icons.restaurant;
+      case 'main course':
+        return Icons.dinner_dining;
+      case 'beverages':
+        return Icons.coffee;
+      case 'soups':
+        return Icons.soup_kitchen;
+      case 'salads':
+        return Icons.eco;
+      default:
+        return Icons.restaurant_menu;
+    }
   }
 }

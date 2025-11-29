@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:developer' as developer;
 import '../models/menu_models.dart';
 
 class SupabaseService {
@@ -24,12 +25,11 @@ class SupabaseService {
     await client.auth.signOut();
   }
 
-  // Add these helpful getters for easier access
   User? get currentUser => client.auth.currentUser;
   String? get currentUserId => client.auth.currentUser?.id;
   bool get isAuthenticated => client.auth.currentUser != null;
 
-  // Auth methods for login/signup
+  // Auth methods
   Future<AuthResponse> signIn(String email, String password) async {
     return await client.auth.signInWithPassword(
       email: email,
@@ -55,9 +55,189 @@ class SupabaseService {
     );
   }
 
-  // ==================== HOME SCREEN DATA METHODS ====================
+  // ==================== CATEGORY METHODS ====================
 
-  // Get current user profile
+  Future<List<AppCategory>> getCategories({String? establishmentId}) async {
+    try {
+      // 1. Start the query builder (FilterBuilder)
+      var query = client
+          .from('menu_categories')
+          .select()
+          .eq('is_active', true);
+
+      // 2. Apply conditional filters BEFORE ordering
+      if (establishmentId != null) {
+        query = query.eq('establishment_id', establishmentId);
+      }
+
+      // 3. Apply Order (Modifier) at the end
+      final response = await query.order('display_order');
+
+      if (response.isEmpty) return [];
+
+      return (response as List)
+          .map((category) => AppCategory.fromJson(category))
+          .toList();
+    } catch (e) {
+      developer.log('Error fetching categories: $e', name: 'SupabaseService');
+      return [];
+    }
+  }
+
+  // ==================== MENU ITEM METHODS ====================
+
+  Future<List<MenuItem>> getMenuItemsByEstablishment(String establishmentId) async {
+    try {
+      final response = await client
+          .from('menu_items')
+          .select('*, menu_categories!inner(establishment_id)')
+          .eq('menu_categories.establishment_id', establishmentId)
+          .eq('is_available', true)
+          .order('name'); // Modifiers go last
+
+      if (response.isEmpty) return [];
+
+      return (response as List)
+          .map((item) => MenuItem.fromJson(item))
+          .toList();
+    } catch (e) {
+      developer.log('Error fetching menu items: $e', name: 'SupabaseService');
+      return [];
+    }
+  }
+
+  Future<List<MenuItem>> searchMenuItems(String searchQuery, {String? establishmentId}) async {
+    try {
+      // 1. Start Query
+      var query = client
+          .from('menu_items')
+          .select('*, menu_categories!inner(establishment_id)')
+          .eq('is_available', true)
+          .ilike('name', '%$searchQuery%');
+
+      // 2. Apply conditional filter
+      if (establishmentId != null) {
+        query = query.eq('menu_categories.establishment_id', establishmentId);
+      }
+
+      // 3. Await response (no specific order needed for search, but if needed, add .order() here)
+      final response = await query;
+
+      if (response.isEmpty) return [];
+
+      return (response as List)
+          .map((item) => MenuItem.fromJson(item))
+          .toList();
+    } catch (e) {
+      developer.log('Error searching menu items: $e', name: 'SupabaseService');
+      return [];
+    }
+  }
+
+  Future<List<MenuItem>> getBestsellers({String? establishmentId}) async {
+    try {
+      var query = client
+          .from('menu_items')
+          .select('*, menu_categories!inner(establishment_id)')
+          .eq('is_bestseller', true)
+          .eq('is_available', true);
+
+      if (establishmentId != null) {
+        query = query.eq('menu_categories.establishment_id', establishmentId);
+      }
+
+      final response = await query;
+
+      if (response.isEmpty) return [];
+
+      return (response as List)
+          .map((item) => MenuItem.fromJson(item))
+          .toList();
+    } catch (e) {
+      developer.log('Error fetching bestsellers: $e', name: 'SupabaseService');
+      return [];
+    }
+  }
+
+  Future<List<MenuItem>> getRecommended({String? establishmentId}) async {
+    try {
+      // 1. Start Query
+      var query = client
+          .from('menu_items')
+          .select('*, menu_categories!inner(establishment_id)')
+          .eq('is_recommended', true)
+          .eq('is_available', true);
+
+      // 2. Apply Filter
+      if (establishmentId != null) {
+        query = query.eq('menu_categories.establishment_id', establishmentId);
+      }
+
+      // 3. Apply Limit (Modifier) last
+      final response = await query.limit(8);
+
+      if (response.isEmpty) return [];
+
+      return (response as List)
+          .map((item) => MenuItem.fromJson(item))
+          .toList();
+    } catch (e) {
+      developer.log('Error fetching recommended items: $e', name: 'SupabaseService');
+      return [];
+    }
+  }
+
+  Future<List<MenuItem>> getMenuItemsByCategory(String categoryId) async {
+    try {
+      final response = await client
+          .from('menu_items')
+          .select('*')
+          .eq('category_id', categoryId)
+          .eq('is_available', true)
+          .order('name');
+
+      return (response as List).map((json) => MenuItem.fromJson(json)).toList();
+    } catch (e) {
+      developer.log('Error fetching menu items by category: $e', name: 'SupabaseService');
+      return [];
+    }
+  }
+
+  Future<List<MenuItem>> getAllMenuItems() async {
+    try {
+      final response = await client
+          .from('menu_items')
+          .select('*')
+          .eq('is_available', true)
+          .order('name');
+
+      return (response as List).map((json) => MenuItem.fromJson(json)).toList();
+    } catch (e) {
+      developer.log('Error fetching all menu items: $e', name: 'SupabaseService');
+      return [];
+    }
+  }
+
+  // ==================== ESTABLISHMENT METHODS ====================
+
+  Future<Map<String, dynamic>?> getEstablishment(String establishmentId) async {
+    try {
+      final response = await client
+          .from('establishments')
+          .select()
+          .eq('id', establishmentId)
+          .eq('is_active', true)
+          .single(); // Modifier goes last
+
+      return response;
+    } catch (e) {
+      developer.log('Error fetching establishment: $e', name: 'SupabaseService');
+      return null;
+    }
+  }
+
+  // ==================== USER PROFILE METHODS ====================
+
   Future<UserProfile?> getCurrentUserProfile() async {
     try {
       final user = client.auth.currentUser;
@@ -65,123 +245,19 @@ class SupabaseService {
 
       final response = await client
           .from('users')
-          .select()
+          .select('*')
           .eq('id', user.id)
           .single();
 
       return UserProfile.fromJson(response);
     } catch (e) {
-      print('Error fetching user profile: $e');
+      developer.log('Error fetching user profile: $e', name: 'SupabaseService');
       return null;
     }
   }
 
-  // Fetch all active categories for the current establishment
-  Future<List<AppCategory>> getCategories({String? establishmentId}) async {
-    try {
-      final response = await client
-          .from('menu_categories')
-          .select()
-          .eq('is_active', true)
-          .order('display_order');
+  // ==================== FAVORITES METHODS ====================
 
-      return (response as List).map((json) => AppCategory.fromJson(json)).toList();
-    } catch (e) {
-      print('Error fetching categories: $e');
-      return [];
-    }
-  }
-
-  // Fetch bestseller items
-  Future<List<MenuItem>> getBestsellers() async {
-    try {
-      final response = await client
-          .from('menu_items')
-          .select()
-          .eq('is_bestseller', true)
-          .eq('is_available', true)
-          .order('name');
-
-      return (response as List).map((json) => MenuItem.fromJson(json)).toList();
-    } catch (e) {
-      print('Error fetching bestsellers: $e');
-      return [];
-    }
-  }
-
-  // Fetch recommended items
-  Future<List<MenuItem>> getRecommended() async {
-    try {
-      final response = await client
-          .from('menu_items')
-          .select()
-          .eq('is_recommended', true)
-          .eq('is_available', true)
-          .order('name');
-
-      return (response as List).map((json) => MenuItem.fromJson(json)).toList();
-    } catch (e) {
-      print('Error fetching recommended items: $e');
-      return [];
-    }
-  }
-
-  // Search menu items - UPDATED to use ilike and include categories
-  Future<List<MenuItem>> searchMenuItems(String query) async {
-    try {
-      final response = await client
-          .from('menu_items')
-          .select('''
-            *,
-            menu_categories!inner(
-              name,
-              establishment_id
-            )
-          ''')
-          .ilike('name', '%$query%')
-          .eq('is_available', true);
-
-      return (response as List).map((json) => MenuItem.fromJson(json)).toList();
-    } catch (e) {
-      print('Error searching menu items: $e');
-      return [];
-    }
-  }
-
-  // Get menu items by category
-  Future<List<MenuItem>> getMenuItemsByCategory(String categoryId) async {
-    try {
-      final response = await client
-          .from('menu_items')
-          .select()
-          .eq('category_id', categoryId)
-          .eq('is_available', true)
-          .order('name');
-
-      return (response as List).map((json) => MenuItem.fromJson(json)).toList();
-    } catch (e) {
-      print('Error fetching menu items by category: $e');
-      return [];
-    }
-  }
-
-  // Get all available menu items
-  Future<List<MenuItem>> getAllMenuItems() async {
-    try {
-      final response = await client
-          .from('menu_items')
-          .select()
-          .eq('is_available', true)
-          .order('name');
-
-      return (response as List).map((json) => MenuItem.fromJson(json)).toList();
-    } catch (e) {
-      print('Error fetching all menu items: $e');
-      return [];
-    }
-  }
-
-  // Get user favorites
   Future<List<MenuItem>> getUserFavorites() async {
     try {
       final user = client.auth.currentUser;
@@ -189,21 +265,18 @@ class SupabaseService {
 
       final response = await client
           .from('user_favorites')
-          .select('''
-            menu_items(*)
-          ''')
+          .select('menu_items(*)')
           .eq('user_id', user.id);
 
       return (response as List)
           .map((json) => MenuItem.fromJson(json['menu_items']))
           .toList();
     } catch (e) {
-      print('Error fetching favorites: $e');
+      developer.log('Error fetching favorites: $e', name: 'SupabaseService');
       return [];
     }
   }
 
-  // Add item to favorites
   Future<void> addToFavorites(String menuItemId) async {
     try {
       final user = client.auth.currentUser;
@@ -214,12 +287,11 @@ class SupabaseService {
         'menu_item_id': menuItemId,
       });
     } catch (e) {
-      print('Error adding to favorites: $e');
+      developer.log('Error adding to favorites: $e', name: 'SupabaseService');
       rethrow;
     }
   }
 
-  // Remove from favorites
   Future<void> removeFromFavorites(String menuItemId) async {
     try {
       final user = client.auth.currentUser;
@@ -231,29 +303,32 @@ class SupabaseService {
           .eq('user_id', user.id)
           .eq('menu_item_id', menuItemId);
     } catch (e) {
-      print('Error removing from favorites: $e');
+      developer.log('Error removing from favorites: $e', name: 'SupabaseService');
       rethrow;
     }
   }
 
-  // Add item to cart (creates or updates an order)
+  // ==================== CART & ORDER METHODS ====================
+
   Future<void> addToCart(String menuItemId, int quantity) async {
     try {
       final user = client.auth.currentUser;
       if (user == null) throw Exception('User not authenticated');
 
-      // First, check if user has an active order
-      final activeOrders = await client
+      // Check active orders
+      var activeOrdersQuery = client
           .from('orders')
-          .select()
+          .select('*')
           .eq('customer_id', user.id)
-          .inFilter('status', ['pending', 'confirmed'])
-          .limit(1);
+          .inFilter('status', ['pending', 'confirmed']);
+      // Note: .limit(1) moved to the end if we were awaiting immediately,
+      // but since we need the list to check isEmpty, we can just await the query.
+      // Or strictly:
+      final activeOrders = await activeOrdersQuery.limit(1);
 
       String orderId;
 
       if (activeOrders.isEmpty) {
-        // Create a new order
         final newOrder = await client
             .from('orders')
             .insert({
@@ -271,7 +346,7 @@ class SupabaseService {
         orderId = activeOrders.first['id'] as String;
       }
 
-      // Get menu item price
+      // Get Item Price
       final menuItem = await client
           .from('menu_items')
           .select('price')
@@ -281,25 +356,43 @@ class SupabaseService {
       final price = (menuItem['price'] as num).toDouble();
       final lineTotal = price * quantity;
 
-      // Add item to order
-      await client.from('order_items').insert({
-        'order_id': orderId,
-        'menu_item_id': menuItemId,
-        'quantity': quantity,
-        'unit_price': price,
-        'line_total': lineTotal,
-      });
+      // Check Existing Items
+      final existingItems = await client
+          .from('order_items')
+          .select('*')
+          .eq('order_id', orderId)
+          .eq('menu_item_id', menuItemId);
 
-      // Update order total
+      if (existingItems.isNotEmpty) {
+        final existingItem = existingItems.first;
+        final newQuantity = (existingItem['quantity'] as int) + quantity;
+        final newLineTotal = price * newQuantity;
+
+        await client
+            .from('order_items')
+            .update({
+          'quantity': newQuantity,
+          'line_total': newLineTotal,
+        })
+            .eq('id', existingItem['id']);
+      } else {
+        await client.from('order_items').insert({
+          'order_id': orderId,
+          'menu_item_id': menuItemId,
+          'quantity': quantity,
+          'unit_price': price,
+          'line_total': lineTotal,
+        });
+      }
+
       await _updateOrderTotal(orderId);
 
     } catch (e) {
-      print('Error adding item to cart: $e');
+      developer.log('Error adding item to cart: $e', name: 'SupabaseService');
       rethrow;
     }
   }
 
-  // Get cart items for current user
   Future<List<Map<String, dynamic>>> getCartItems() async {
     try {
       final user = client.auth.currentUser;
@@ -307,7 +400,7 @@ class SupabaseService {
 
       final activeOrders = await client
           .from('orders')
-          .select()
+          .select('*')
           .eq('customer_id', user.id)
           .inFilter('status', ['pending', 'confirmed'])
           .limit(1);
@@ -318,93 +411,48 @@ class SupabaseService {
 
       final response = await client
           .from('order_items')
-          .select('''
-            *,
-            menu_items (
-              name,
-              description,
-              image_url
-            )
-          ''')
+          .select('*, menu_items(id, name, description, image_url, price)')
           .eq('order_id', orderId);
 
       return (response as List).cast<Map<String, dynamic>>();
     } catch (e) {
-      print('Error fetching cart items: $e');
+      developer.log('Error fetching cart items: $e', name: 'SupabaseService');
       return [];
     }
   }
 
-  // ==================== PRIVATE HELPER METHODS ====================
-
-  Future<void> _updateOrderTotal(String orderId) async {
+  Future<void> updateCartItemQuantity(String orderItemId, int newQuantity) async {
     try {
-      // Calculate total from order items
-      final orderItems = await client
+      if (newQuantity <= 0) {
+        await removeFromCart(orderItemId);
+        return;
+      }
+
+      final orderItem = await client
           .from('order_items')
-          .select('line_total')
-          .eq('order_id', orderId);
+          .select('*, menu_items(price)')
+          .eq('id', orderItemId)
+          .single();
 
-      double total = 0;
-      for (final item in orderItems) {
-        total += (item['line_total'] as num).toDouble();
-      }
+      final price = (orderItem['menu_items']['price'] as num).toDouble();
+      final newLineTotal = price * newQuantity;
 
-      // Update order total
       await client
-          .from('orders')
-          .update({'total_amount': total})
-          .eq('id', orderId);
+          .from('order_items')
+          .update({
+        'quantity': newQuantity,
+        'line_total': newLineTotal,
+      })
+          .eq('id', orderItemId);
+
+      final orderId = orderItem['order_id'] as String;
+      await _updateOrderTotal(orderId);
+
     } catch (e) {
-      print('Error updating order total: $e');
+      developer.log('Error updating cart item quantity: $e', name: 'SupabaseService');
+      rethrow;
     }
   }
-
-  Future<String> _getDefaultEstablishmentId() async {
-    // In a real app, you might want to get this from user preferences or context
-    // For now, return the first active establishment
-    try {
-      final response = await client
-          .from('establishments')
-          .select('id')
-          .eq('is_active', true)
-          .limit(1);
-
-      if (response.isNotEmpty) {
-        return response.first['id'] as String;
-      }
-
-      // Fallback - you might want to handle this differently
-      return 'default-establishment-id';
-    } catch (e) {
-      print('Error getting default establishment: $e');
-      return 'default-establishment-id';
-    }
-  }
-
-  Future<String> _getDefaultTableId() async {
-    // In a real app, this would come from QR code scan or user selection
-    try {
-      final establishmentId = await _getDefaultEstablishmentId();
-      final response = await client
-          .from('tables')
-          .select('id')
-          .eq('establishment_id', establishmentId)
-          .eq('is_available', true)
-          .limit(1);
-
-      if (response.isNotEmpty) {
-        return response.first['id'] as String;
-      }
-
-      return 'default-table-id';
-    } catch (e) {
-      print('Error getting default table: $e');
-      return 'default-table-id';
-    }
-  }
-
-  // ==================== ORDER MANAGEMENT ====================
 
   Future<void> updateOrderStatus(String orderId, String status) async {
     try {
@@ -413,19 +461,29 @@ class SupabaseService {
           .update({'status': status, 'updated_at': DateTime.now().toIso8601String()})
           .eq('id', orderId);
     } catch (e) {
-      print('Error updating order status: $e');
+      developer.log('Error updating order status: $e', name: 'SupabaseService');
       rethrow;
     }
   }
 
   Future<void> removeFromCart(String orderItemId) async {
     try {
+      final orderItem = await client
+          .from('order_items')
+          .select('order_id')
+          .eq('id', orderItemId)
+          .single();
+
+      final orderId = orderItem['order_id'] as String;
+
       await client
           .from('order_items')
           .delete()
           .eq('id', orderItemId);
+
+      await _updateOrderTotal(orderId);
     } catch (e) {
-      print('Error removing item from cart: $e');
+      developer.log('Error removing item from cart: $e', name: 'SupabaseService');
       rethrow;
     }
   }
@@ -439,8 +497,90 @@ class SupabaseService {
 
       await _updateOrderTotal(orderId);
     } catch (e) {
-      print('Error clearing cart: $e');
+      developer.log('Error clearing cart: $e', name: 'SupabaseService');
       rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getActiveOrder() async {
+    try {
+      final user = client.auth.currentUser;
+      if (user == null) return null;
+
+      final activeOrders = await client
+          .from('orders')
+          .select('*')
+          .eq('customer_id', user.id)
+          .inFilter('status', ['pending', 'confirmed'])
+          .limit(1);
+
+      if (activeOrders.isEmpty) return null;
+
+      return activeOrders.first as Map<String, dynamic>;
+    } catch (e) {
+      developer.log('Error getting active order: $e', name: 'SupabaseService');
+      return null;
+    }
+  }
+
+  // ==================== PRIVATE HELPER METHODS ====================
+
+  Future<void> _updateOrderTotal(String orderId) async {
+    try {
+      final orderItems = await client
+          .from('order_items')
+          .select('line_total')
+          .eq('order_id', orderId);
+
+      double total = 0;
+      for (final item in orderItems) {
+        total += (item['line_total'] as num).toDouble();
+      }
+
+      await client
+          .from('orders')
+          .update({'total_amount': total})
+          .eq('id', orderId);
+    } catch (e) {
+      developer.log('Error updating order total: $e', name: 'SupabaseService');
+    }
+  }
+
+  Future<String> _getDefaultEstablishmentId() async {
+    try {
+      final response = await client
+          .from('establishments')
+          .select('id')
+          .eq('is_active', true)
+          .limit(1);
+
+      if (response.isNotEmpty) {
+        return response.first['id'] as String;
+      }
+      return 'default-establishment-id';
+    } catch (e) {
+      developer.log('Error getting default establishment: $e', name: 'SupabaseService');
+      return 'default-establishment-id';
+    }
+  }
+
+  Future<String> _getDefaultTableId() async {
+    try {
+      final establishmentId = await _getDefaultEstablishmentId();
+      final response = await client
+          .from('tables')
+          .select('id')
+          .eq('establishment_id', establishmentId)
+          .eq('is_available', true)
+          .limit(1);
+
+      if (response.isNotEmpty) {
+        return response.first['id'] as String;
+      }
+      return 'default-table-id';
+    } catch (e) {
+      developer.log('Error getting default table: $e', name: 'SupabaseService');
+      return 'default-table-id';
     }
   }
 
@@ -464,22 +604,5 @@ class SupabaseService {
   // Storage URL helper method
   String storagePublicUrl(String bucketName, String filePath) {
     return '$supabaseUrl/storage/v1/object/public/$bucketName/$filePath';
-  }
-
-  // Add to SupabaseService class
-  Future<List<MenuItem>> getMenuItemsByEstablishment(String establishmentId) async {
-    try {
-      final response = await client
-          .from('menu_items')
-          .select()
-          .eq('establishment_id', establishmentId)
-          .eq('is_available', true)
-          .order('name');
-
-      return (response as List).map((json) => MenuItem.fromJson(json)).toList();
-    } catch (e) {
-      print('Error fetching menu items: $e');
-      return [];
-    }
   }
 }

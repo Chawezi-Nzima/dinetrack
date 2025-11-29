@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-//import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/services/supabase_service.dart';
 import '../../../../core/models/menu_models.dart';
+import './menu_screen.dart';
 
 class HomeCustomer extends StatefulWidget {
   final String establishmentId;
@@ -29,6 +29,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
   Future<List<MenuItem>> _bestsellersFuture = Future.value([]);
   Future<List<MenuItem>> _recommendedFuture = Future.value([]);
   Future<UserProfile?> _userProfileFuture = Future.value(null);
+  Future<Map<String, dynamic>?> _establishmentFuture = Future.value(null);
 
   final TextEditingController _searchController = TextEditingController();
   List<MenuItem> _searchResults = [];
@@ -39,8 +40,6 @@ class _HomeCustomerState extends State<HomeCustomer> {
   void initState() {
     super.initState();
     _loadData();
-
-    // Add search listener
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -53,10 +52,11 @@ class _HomeCustomerState extends State<HomeCustomer> {
 
   void _loadData() {
     setState(() {
-      _categoriesFuture = _supabaseService.getCategories();
-      _bestsellersFuture = _supabaseService.getBestsellers();
-      _recommendedFuture = _supabaseService.getRecommended();
+      _categoriesFuture = _supabaseService.getCategories(establishmentId: widget.establishmentId);
+      _bestsellersFuture = _supabaseService.getBestsellers(establishmentId: widget.establishmentId);
+      _recommendedFuture = _supabaseService.getRecommended(establishmentId: widget.establishmentId);
       _userProfileFuture = _supabaseService.getCurrentUserProfile();
+      _establishmentFuture = _supabaseService.getEstablishment(widget.establishmentId);
     });
   }
 
@@ -70,13 +70,17 @@ class _HomeCustomerState extends State<HomeCustomer> {
 
       if (query.isNotEmpty) {
         _performSearch(query);
+      } else {
+        setState(() {
+          _searchResults.clear();
+        });
       }
     }
   }
 
-  void _performSearch(String query) async {
+  Future<void> _performSearch(String query) async {
     try {
-      final results = await _supabaseService.searchMenuItems(query);
+      final results = await _supabaseService.searchMenuItems(query, establishmentId: widget.establishmentId);
       setState(() {
         _searchResults = results;
       });
@@ -93,11 +97,24 @@ class _HomeCustomerState extends State<HomeCustomer> {
     });
   }
 
-  void _refreshData() {
+  Future<void> _refreshData() async {
     _loadData();
     if (_isSearching && _searchQuery.isNotEmpty) {
-      _performSearch(_searchQuery);
+      await _performSearch(_searchQuery);
     }
+  }
+
+  void _navigateToMenuScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MenuScreen(
+          establishmentId: widget.establishmentId,
+          onAddToCart: widget.onAddToCart,
+          cartItemCount: widget.cartItemCount,
+        ),
+      ),
+    );
   }
 
   @override
@@ -105,22 +122,28 @@ class _HomeCustomerState extends State<HomeCustomer> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'DineTrack',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+        title: FutureBuilder<Map<String, dynamic>?>(
+          future: _establishmentFuture,
+          builder: (context, snapshot) {
+            final establishmentName = snapshot.data?['name'] ?? 'DineTrack';
+            return Text(
+              establishmentName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            );
+          },
         ),
         backgroundColor: _primaryGreen,
         actions: [
-          // Cart badge in app bar
-          /*Stack(
+          // Cart badge
+          Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.shopping_cart, color: Colors.white),
+                icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
                 onPressed: () {
-                  // TODO: Navigate to cart screen
+                  // Navigate to cart screen
                 },
               ),
               if (widget.cartItemCount > 0)
@@ -129,19 +152,19 @@ class _HomeCustomerState extends State<HomeCustomer> {
                   top: 8,
                   child: Container(
                     padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: Colors.red,
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     constraints: const BoxConstraints(
-                      minWidth: 16,
-                      minHeight: 16,
+                      minWidth: 14,
+                      minHeight: 14,
                     ),
                     child: Text(
                       widget.cartItemCount > 9 ? '9+' : widget.cartItemCount.toString(),
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 8,
                         fontWeight: FontWeight.bold,
                       ),
                       textAlign: TextAlign.center,
@@ -149,7 +172,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
                   ),
                 ),
             ],
-          ),*/
+          ),
         ],
       ),
       body: SafeArea(
@@ -161,10 +184,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
             // 📱 MAIN CONTENT
             Expanded(
               child: RefreshIndicator(
-                onRefresh: () async {
-                  _refreshData();
-                  await Future.delayed(const Duration(seconds: 1));
-                },
+                onRefresh: _refreshData,
                 child: CustomScrollView(
                   slivers: [
                     // 🔍 SEARCH BAR
@@ -221,7 +241,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
     return [
       // 🍽️ CATEGORIES SECTION
       SliverToBoxAdapter(
-        child: _buildSectionHeader("Categories", "See All"),
+        child: _buildSectionHeader("Categories", "See All", onSeeAll: _navigateToMenuScreen),
       ),
       SliverToBoxAdapter(
         child: _buildCategoriesRow(),
@@ -229,7 +249,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
 
       // 🔥 BEST SELLERS
       SliverToBoxAdapter(
-        child: _buildSectionHeader("Best Sellers", "See All"),
+        child: _buildSectionHeader("Best Sellers", "See All", onSeeAll: _navigateToMenuScreen),
       ),
       SliverToBoxAdapter(
         child: FutureBuilder<List<MenuItem>>(
@@ -248,7 +268,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
 
       // 💚 RECOMMENDED FOR YOU
       SliverToBoxAdapter(
-        child: _buildSectionHeader("Recommended for you", "See All"),
+        child: _buildSectionHeader("Recommended for you", "See All", onSeeAll: _navigateToMenuScreen),
       ),
       _buildRecommendedGrid(),
     ];
@@ -260,6 +280,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
       future: _userProfileFuture,
       builder: (context, snapshot) {
         final userName = snapshot.data?.fullName?.split(' ').first ?? 'Guest';
+        final dineCoins = snapshot.data?.dineCoinsBalance ?? 0.0;
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -288,6 +309,15 @@ class _HomeCustomerState extends State<HomeCustomer> {
                         color: Colors.black,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "DineCoins: ${dineCoins.toStringAsFixed(0)}",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: _primaryGreen,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -295,7 +325,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: _primaryGreen.withValues(alpha:0.3)),
+                  border: Border.all(color: _primaryGreen.withValues(alpha: 0.3)),
                 ),
                 child: CircleAvatar(
                   radius: 22,
@@ -347,7 +377,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: _primaryGreen.withValues(alpha: 0.1),
+          color: _primaryGreen.withValues(alpha:0.1),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -382,7 +412,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Fresh and organic food delivered to your doorstep",
+                    "Fresh and organic food delivered to your table",
                     style: TextStyle(
                       color: _darkGrey,
                       fontSize: 14,
@@ -416,7 +446,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
   }
 
   // 📌 SECTION HEADER
-  Widget _buildSectionHeader(String title, String action) {
+  Widget _buildSectionHeader(String title, String action, {VoidCallback? onSeeAll}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
       child: Row(
@@ -430,11 +460,14 @@ class _HomeCustomerState extends State<HomeCustomer> {
               color: Colors.black,
             ),
           ),
-          Text(
-            action,
-            style: TextStyle(
-              color: _primaryGreen,
-              fontWeight: FontWeight.w600,
+          GestureDetector(
+            onTap: onSeeAll,
+            child: Text(
+              action,
+              style: TextStyle(
+                color: _primaryGreen,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -477,34 +510,37 @@ class _HomeCustomerState extends State<HomeCustomer> {
   }
 
   Widget _buildCategoryItem(AppCategory category) {
-    return Column(
-      children: [
-        Container(
-          width: 70,
-          height: 70,
-          decoration: BoxDecoration(
-            color: _lightGrey,
-            borderRadius: BorderRadius.circular(20),
+    return GestureDetector(
+      onTap: _navigateToMenuScreen,
+      child: Column(
+        children: [
+          Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              color: _lightGrey,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              _getIconForCategory(category.name),
+              size: 32,
+              color: _primaryGreen,
+            ),
           ),
-          child: Icon(
-            _getIconForCategory(category.name),
-            size: 32,
-            color: _primaryGreen,
+          const SizedBox(height: 8),
+          Text(
+            category.name,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: _darkGrey,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          category.name,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: _darkGrey,
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -549,7 +585,10 @@ class _HomeCustomerState extends State<HomeCustomer> {
                 return const SizedBox();
               }
               final item = snapshot.data![index];
-              return _buildProductCard(item);
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: _buildProductCard(item),
+              );
             },
           );
         },
@@ -587,6 +626,13 @@ class _HomeCustomerState extends State<HomeCustomer> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha:0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -644,6 +690,32 @@ class _HomeCustomerState extends State<HomeCustomer> {
                     ),
                   ),
                 ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha:0.6),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star, color: Colors.amber, size: 12),
+                      const SizedBox(width: 2),
+                      Text(
+                        item.rating.toStringAsFixed(1),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
 
@@ -682,7 +754,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                        color: _primaryGreen,
                       ),
                     ),
                     InkWell(
@@ -796,6 +868,12 @@ class _HomeCustomerState extends State<HomeCustomer> {
         return Icons.cake;
       case 'snacks':
         return Icons.fastfood;
+      case 'appetizers':
+        return Icons.restaurant;
+      case 'main course':
+        return Icons.dinner_dining;
+      case 'beverages':
+        return Icons.coffee;
       default:
         return Icons.restaurant_menu;
     }
