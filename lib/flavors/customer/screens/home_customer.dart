@@ -85,7 +85,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
         _searchResults = results;
       });
     } catch (e) {
-      print('Search error: $e');
+      debugPrint('Search error: $e');
     }
   }
 
@@ -125,6 +125,8 @@ class _HomeCustomerState extends State<HomeCustomer> {
         title: FutureBuilder<Map<String, dynamic>?>(
           future: _establishmentFuture,
           builder: (context, snapshot) {
+            // Handle error gracefully to prevent crash
+            if (snapshot.hasError) return const Text('DineTrack');
             final establishmentName = snapshot.data?['name'] ?? 'DineTrack';
             return Text(
               establishmentName,
@@ -136,44 +138,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
           },
         ),
         backgroundColor: _primaryGreen,
-        actions: [
-          // Cart badge
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
-                onPressed: () {
-                  // Navigate to cart screen
-                },
-              ),
-              if (widget.cartItemCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 14,
-                      minHeight: 14,
-                    ),
-                    child: Text(
-                      widget.cartItemCount > 9 ? '9+' : widget.cartItemCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 8,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
+        actions: [],
       ),
       body: SafeArea(
         child: Column(
@@ -258,7 +223,8 @@ class _HomeCustomerState extends State<HomeCustomer> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
             }
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            // Check errors
+            if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
               return _buildEmptySection("No bestsellers available");
             }
             return _buildBestSellersGrid(snapshot.data!);
@@ -270,17 +236,31 @@ class _HomeCustomerState extends State<HomeCustomer> {
       SliverToBoxAdapter(
         child: _buildSectionHeader("Recommended for you", "See All", onSeeAll: _navigateToMenuScreen),
       ),
-      _buildRecommendedGrid(),
+      _buildRecommendedGrid(), // Updated logic inside
     ];
   }
 
-  // 👤 USER HEADER
+  // 👤 USER HEADER - SAFE SPLIT LOGIC
   Widget _buildUserHeader() {
     return FutureBuilder<UserProfile?>(
       future: _userProfileFuture,
       builder: (context, snapshot) {
-        final userName = snapshot.data?.fullName?.split(' ').first ?? 'Guest';
-        final dineCoins = snapshot.data?.dineCoinsBalance ?? 0.0;
+        String userName = 'Guest';
+        double dineCoins = 0.0;
+
+        // Safer logic for name extraction
+        if (snapshot.hasData && snapshot.data != null) {
+          final fullName = snapshot.data!.fullName;
+          if (fullName != null && fullName.isNotEmpty) {
+            final parts = fullName.split(' ');
+            if (parts.isNotEmpty) {
+              userName = parts.first;
+            } else {
+              userName = fullName;
+            }
+          }
+          dineCoins = snapshot.data!.dineCoinsBalance;
+        }
 
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -329,7 +309,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
                 ),
                 child: CircleAvatar(
                   radius: 22,
-                  backgroundColor: _primaryGreen.withValues(alpha:0.1),
+                  backgroundColor: _primaryGreen.withValues(alpha: 0.1),
                   child: Icon(Icons.person, color: _primaryGreen, size: 24),
                 ),
               ),
@@ -377,7 +357,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: _primaryGreen.withValues(alpha:0.1),
+          color: _primaryGreen.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -422,22 +402,15 @@ class _HomeCustomerState extends State<HomeCustomer> {
               ),
             ),
             const SizedBox(width: 20),
-            Image.asset(
-              "assets/images/fresh_food.png",
+            // Replaced with Icon as placeholder to avoid asset crash
+            Container(
               width: 100,
               height: 100,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: _lightGrey,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.restaurant, color: _primaryGreen, size: 40),
-                );
-              },
+              decoration: BoxDecoration(
+                color: _lightGrey,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.restaurant, color: _primaryGreen, size: 40),
             ),
           ],
         ),
@@ -488,7 +461,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
         }
 
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return _buildEmptySection("No categories available");
+          return _buildEmptySection("No categories");
         }
 
         final categories = snapshot.data!;
@@ -564,36 +537,47 @@ class _HomeCustomerState extends State<HomeCustomer> {
     );
   }
 
-  // 💚 RECOMMENDED GRID
-  SliverGrid _buildRecommendedGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.75,
-        crossAxisSpacing: 15,
-        mainAxisSpacing: 15,
-      ),
-      delegate: SliverChildBuilderDelegate(
-            (context, index) {
-          return FutureBuilder<List<MenuItem>>(
-            future: _recommendedFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return _buildProductCardShimmer();
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty || index >= snapshot.data!.length) {
-                return const SizedBox();
-              }
-              final item = snapshot.data![index];
+  // 💚 RECOMMENDED GRID - REFACTORED TO FIX "NO ELEMENT" ERROR
+  Widget _buildRecommendedGrid() {
+    return FutureBuilder<List<MenuItem>>(
+      future: _recommendedFuture,
+      builder: (context, snapshot) {
+        // 1. Return a SliverToBoxAdapter with loading state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: _buildProductCardShimmer(),
+              )
+          );
+        }
+
+        // 2. Return a SliverToBoxAdapter for error or empty state (Prevents crash)
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
+
+        final items = snapshot.data!;
+
+        // 3. Return the actual SliverGrid with valid data count
+        return SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.75,
+            crossAxisSpacing: 15,
+            mainAxisSpacing: 15,
+          ),
+          delegate: SliverChildBuilderDelegate(
+                (context, index) {
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: _buildProductCard(item),
+                child: _buildProductCard(items[index]),
               );
             },
-          );
-        },
-        childCount: 4, // Show 4 items initially
-      ),
+            childCount: items.length > 4 ? 4 : items.length, // Limit to 4 or less
+          ),
+        );
+      },
     );
   }
 
@@ -628,7 +612,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -690,32 +674,6 @@ class _HomeCustomerState extends State<HomeCustomer> {
                     ),
                   ),
                 ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha:0.6),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.star, color: Colors.amber, size: 12),
-                      const SizedBox(width: 2),
-                      Text(
-                        item.rating.toStringAsFixed(1),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
 
@@ -813,16 +771,6 @@ class _HomeCustomerState extends State<HomeCustomer> {
                 SizedBox(height: 8),
                 SizedBox(height: 4),
                 SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    SizedBox(height: 20),
-                    SizedBox(
-                      width: 30,
-                      height: 30,
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
