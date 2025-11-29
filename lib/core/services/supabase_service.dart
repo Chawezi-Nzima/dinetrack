@@ -126,13 +126,19 @@ class SupabaseService {
     }
   }
 
-  // Search menu items
+  // Search menu items - UPDATED to use ilike and include categories
   Future<List<MenuItem>> searchMenuItems(String query) async {
     try {
       final response = await client
           .from('menu_items')
-          .select()
-          .textSearch('name', query)
+          .select('''
+            *,
+            menu_categories!inner(
+              name,
+              establishment_id
+            )
+          ''')
+          .ilike('name', '%$query%')
           .eq('is_available', true);
 
       return (response as List).map((json) => MenuItem.fromJson(json)).toList();
@@ -175,6 +181,61 @@ class SupabaseService {
     }
   }
 
+  // Get user favorites
+  Future<List<MenuItem>> getUserFavorites() async {
+    try {
+      final user = client.auth.currentUser;
+      if (user == null) return [];
+
+      final response = await client
+          .from('user_favorites')
+          .select('''
+            menu_items(*)
+          ''')
+          .eq('user_id', user.id);
+
+      return (response as List)
+          .map((json) => MenuItem.fromJson(json['menu_items']))
+          .toList();
+    } catch (e) {
+      print('Error fetching favorites: $e');
+      return [];
+    }
+  }
+
+  // Add item to favorites
+  Future<void> addToFavorites(String menuItemId) async {
+    try {
+      final user = client.auth.currentUser;
+      if (user == null) throw Exception('User not authenticated');
+
+      await client.from('user_favorites').insert({
+        'user_id': user.id,
+        'menu_item_id': menuItemId,
+      });
+    } catch (e) {
+      print('Error adding to favorites: $e');
+      rethrow;
+    }
+  }
+
+  // Remove from favorites
+  Future<void> removeFromFavorites(String menuItemId) async {
+    try {
+      final user = client.auth.currentUser;
+      if (user == null) throw Exception('User not authenticated');
+
+      await client
+          .from('user_favorites')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('menu_item_id', menuItemId);
+    } catch (e) {
+      print('Error removing from favorites: $e');
+      rethrow;
+    }
+  }
+
   // Add item to cart (creates or updates an order)
   Future<void> addToCart(String menuItemId, int quantity) async {
     try {
@@ -193,7 +254,6 @@ class SupabaseService {
 
       if (activeOrders.isEmpty) {
         // Create a new order
-        // Note: You'll need to handle table_id and establishment_id appropriately
         final newOrder = await client
             .from('orders')
             .insert({
@@ -399,5 +459,27 @@ class SupabaseService {
         .stream(primaryKey: ['id'])
         .eq('order_id', orderId)
         .map((event) => event.cast<Map<String, dynamic>>());
+  }
+
+  // Storage URL helper method
+  String storagePublicUrl(String bucketName, String filePath) {
+    return '$supabaseUrl/storage/v1/object/public/$bucketName/$filePath';
+  }
+
+  // Add to SupabaseService class
+  Future<List<MenuItem>> getMenuItemsByEstablishment(String establishmentId) async {
+    try {
+      final response = await client
+          .from('menu_items')
+          .select()
+          .eq('establishment_id', establishmentId)
+          .eq('is_available', true)
+          .order('name');
+
+      return (response as List).map((json) => MenuItem.fromJson(json)).toList();
+    } catch (e) {
+      print('Error fetching menu items: $e');
+      return [];
+    }
   }
 }

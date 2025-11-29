@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../flavors/customer/screens/customer_navigation.dart';
 import '../services/auth_service.dart';
 import '../../flavors/customer/screens/home_customer.dart';
 import '../../flavors/operator/screens/home_operator.dart';
@@ -43,7 +44,7 @@ class _RoleBasedRouterState extends State<RoleBasedRouter> {
 
     switch (_userRole) {
       case 'customer':
-        return CustomerHomeScreen();
+        return CustomerNavigation(establishmentId: '',);
       case 'operator':
         return OperatorHomeScreen();
       case 'kitchen':

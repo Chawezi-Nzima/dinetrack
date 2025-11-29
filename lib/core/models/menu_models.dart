@@ -25,15 +25,26 @@ class AppCategory {
       isActive: json['is_active'] as bool? ?? true,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'establishment_id': establishmentId,
+      'name': name,
+      'description': description,
+      'display_order': displayOrder,
+      'is_active': isActive,
+    };
+  }
 }
 
 class MenuItem {
   final String id;
-  final String categoryId;
   final String name;
-  final String? description;
   final double price;
+  final String? description;
   final String? imageUrl;
+  final String categoryId;
   final bool isAvailable;
   final bool isBestseller;
   final bool isRecommended;
@@ -42,32 +53,48 @@ class MenuItem {
 
   MenuItem({
     required this.id,
-    required this.categoryId,
     required this.name,
-    this.description,
     required this.price,
+    this.description,
     this.imageUrl,
-    required this.isAvailable,
-    required this.isBestseller,
-    required this.isRecommended,
-    required this.rating,
+    required this.categoryId,
+    this.isAvailable = true,
+    this.isBestseller = false,
+    this.isRecommended = false,
+    this.rating = 4.5,
     this.preparationTime,
   });
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
     return MenuItem(
-      id: json['id'] as String,
-      categoryId: json['category_id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String?,
-      price: (json['price'] as num).toDouble(),
-      imageUrl: json['image_url'] as String?,
-      isAvailable: json['is_available'] as bool? ?? true,
-      isBestseller: json['is_bestseller'] as bool? ?? false,
-      isRecommended: json['is_recommended'] as bool? ?? false,
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      price: (json['price'] ?? 0.0).toDouble(),
+      description: json['description'],
+      imageUrl: json['image_url'],
+      categoryId: json['category_id'] ?? '',
+      isAvailable: json['is_available'] ?? true,
+      isBestseller: json['is_bestseller'] ?? false,
+      isRecommended: json['is_recommended'] ?? false,
       rating: (json['rating'] as num?)?.toDouble() ?? 4.5,
       preparationTime: json['preparation_time'] as int?,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'price': price,
+      'description': description,
+      'image_url': imageUrl,
+      'category_id': categoryId,
+      'is_available': isAvailable,
+      'is_bestseller': isBestseller,
+      'is_recommended': isRecommended,
+      'rating': rating,
+      'preparation_time': preparationTime,
+    };
   }
 
   String get formattedPrice {
@@ -97,6 +124,65 @@ class UserProfile {
       fullName: json['full_name'] as String?,
       userType: json['user_type'] as String,
       dineCoinsBalance: (json['dine_coins_balance'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'email': email,
+      'full_name': fullName,
+      'user_type': userType,
+      'dine_coins_balance': dineCoinsBalance,
+    };
+  }
+}
+
+class CartItem {
+  final MenuItem menuItem;
+  final int quantity;
+
+  CartItem({
+    required this.menuItem,
+    required this.quantity,
+  });
+
+  double get totalPrice => menuItem.price * quantity;
+
+  // Enhanced copyWith method for better immutability
+  CartItem copyWith({
+    MenuItem? menuItem,
+    int? quantity,
+  }) {
+    return CartItem(
+      menuItem: menuItem ?? this.menuItem,
+      quantity: quantity ?? this.quantity,
+    );
+  }
+
+  // Helper method to increase quantity
+  CartItem increaseQuantity([int amount = 1]) {
+    return copyWith(quantity: quantity + amount);
+  }
+
+  // Helper method to decrease quantity
+  CartItem decreaseQuantity([int amount = 1]) {
+    return copyWith(quantity: quantity - amount);
+  }
+
+  // Convert to JSON for potential persistence
+  Map<String, dynamic> toJson() {
+    return {
+      'menu_item': menuItem.toJson(),
+      'quantity': quantity,
+    };
+  }
+
+  // Create from JSON
+  factory CartItem.fromJson(Map<String, dynamic> json) {
+    return CartItem(
+      menuItem: MenuItem.fromJson(json['menu_item']),
+      quantity: json['quantity'] as int,
     );
   }
 }
