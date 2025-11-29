@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../core/services/supabase_service.dart';
+//import '../../../../core/services/supabase_service.dart';
 import '../../../../core/models/menu_models.dart';
 
 class ItemDetailScreen extends StatelessWidget {

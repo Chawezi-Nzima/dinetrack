@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../flavors/customer/screens/customer_navigation.dart';
 import '../services/auth_service.dart';
-import '../../flavors/customer/screens/home_customer.dart';
+//import '../../flavors/customer/screens/home_customer.dart';
 import '../../flavors/operator/screens/home_operator.dart';
 import '../../flavors/kitchen/screens/home_kitchen.dart';
 import '../../flavors/supervisor/screens/home_supervisor.dart';

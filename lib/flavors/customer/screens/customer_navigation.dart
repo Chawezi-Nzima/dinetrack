@@ -8,12 +8,12 @@ import '../../../../core/models/menu_models.dart';
 
 class CustomerNavigation extends StatefulWidget {
   final String establishmentId;
-  final String? tableId; // Make tableId optional
+  final String? tableId;
 
   const CustomerNavigation({
     super.key,
     required this.establishmentId,
-    this.tableId, // Now optional
+    this.tableId,
   });
 
   @override
@@ -25,10 +25,9 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
   final SupabaseService _supabaseService = SupabaseService();
   String? _resolvedTableId;
 
-  // Cart state management - using CartItem from menu_models.dart
+  // Cart state management
   final Map<String, CartItem> _cartItems = {};
-  double get _cartTotal => _cartItems.values
-      .fold(0, (total, item) => total + (item.menuItem.price * item.quantity));
+  double _cartTotal = 0.0;
 
   int get _cartItemCount => _cartItems.values
       .fold(0, (count, item) => count + item.quantity);
@@ -37,6 +36,15 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
   void initState() {
     super.initState();
     _resolveTableId();
+    _calculateCartTotal();
+  }
+
+  // Calculate cart total
+  void _calculateCartTotal() {
+    setState(() {
+      _cartTotal = _cartItems.values
+          .fold(0, (total, item) => total + (item.menuItem.price * item.quantity));
+    });
   }
 
   // Resolve table ID - use provided tableId or get a default one
@@ -58,44 +66,40 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
     try {
       final response = await _supabaseService.client
           .from('tables')
-          .select('id')
+          .select()
           .eq('establishment_id', widget.establishmentId)
           .eq('is_available', true)
           .limit(1);
 
-      if (response.isNotEmpty && response[0]['id'] != null) {
+      if (response.isNotEmpty) {
         return response[0]['id'] as String;
       }
-      return 'default-table-id'; // Fallback
+      return 'default-table-id';
     } catch (e) {
       debugPrint('Error getting default table ID: $e');
-      return 'default-table-id'; // Fallback
+      return 'default-table-id';
     }
   }
 
-  // Get default establishment ID (if needed for other operations)
-  Future<String> _getDefaultEstablishmentId() async {
-    // You might want to implement this based on your app logic
-    return widget.establishmentId;
-  }
-
   // Add to cart functionality
-  void _addToCart(MenuItem menuItem, {int quantity = 1}) {
+  void _addToCart(MenuItem menuItem, {int quantity = 1, String? specialInstructions}) {
     setState(() {
       if (_cartItems.containsKey(menuItem.id)) {
         _cartItems[menuItem.id] = CartItem(
           menuItem: menuItem,
           quantity: _cartItems[menuItem.id]!.quantity + quantity,
+          specialInstructions: specialInstructions ?? _cartItems[menuItem.id]!.specialInstructions,
         );
       } else {
         _cartItems[menuItem.id] = CartItem(
           menuItem: menuItem,
           quantity: quantity,
+          specialInstructions: specialInstructions,
         );
       }
+      _calculateCartTotal();
     });
 
-    // Show success feedback
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${menuItem.name} added to cart'),
@@ -114,8 +118,10 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
         _cartItems[menuItemId] = CartItem(
           menuItem: _cartItems[menuItemId]!.menuItem,
           quantity: newQuantity,
+          specialInstructions: _cartItems[menuItemId]!.specialInstructions,
         );
       }
+      _calculateCartTotal();
     });
   }
 
@@ -123,6 +129,7 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
   void _removeFromCart(String menuItemId) {
     setState(() {
       _cartItems.remove(menuItemId);
+      _calculateCartTotal();
     });
   }
 
@@ -130,47 +137,194 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
   void _clearCart() {
     setState(() {
       _cartItems.clear();
+      _cartTotal = 0.0;
     });
   }
 
-  // Handle checkout process
+  // Enhanced checkout method with DineCoins support
+  Future<void> _checkout({String paymentMethod = 'cash', double dineCoinsUsed = 0.0}) async {
+    if (_resolvedTableId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to determine table. Please scan QR code again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_cartItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your cart is empty.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Calculate final amount after DineCoins deduction
+      final finalAmount = paymentMethod == 'dine_coins'
+          ? _cartTotal - dineCoinsUsed
+          : _cartTotal;
+
+      // 1. Create the order
+      final orderResponse = await _supabaseService.client
+          .from('orders')
+          .insert({
+        'establishment_id': widget.establishmentId,
+        'table_id': _resolvedTableId,
+        'customer_id': _supabaseService.client.auth.currentUser?.id,
+        'status': 'pending',
+        'total_amount': _cartTotal, // Original total
+        'special_instructions': _getSpecialInstructions(),
+      })
+          .select()
+          .single();
+
+      final orderId = orderResponse['id'] as String;
+
+      // 2. Create order items
+      final orderItems = _cartItems.entries.map((entry) {
+        final cartItem = entry.value;
+        return {
+          'order_id': orderId,
+          'menu_item_id': cartItem.menuItem.id,
+          'quantity': cartItem.quantity,
+          'unit_price': cartItem.menuItem.price,
+          'line_total': cartItem.quantity * cartItem.menuItem.price,
+          'special_instructions': cartItem.specialInstructions,
+        };
+      }).toList();
+
+      await _supabaseService.client
+          .from('order_items')
+          .insert(orderItems);
+
+      // 3. Create payment record
+      await _supabaseService.client
+          .from('payments')
+          .insert({
+        'order_id': orderId,
+        'amount': finalAmount > 0 ? finalAmount : 0, // Handle full DineCoins payment
+        'payment_method': paymentMethod,
+        'dine_coins_used': dineCoinsUsed,
+        'status': paymentMethod == 'dine_coins' && finalAmount <= 0 ? 'completed' : 'pending',
+      });
+
+      // 4. If DineCoins were used, update ledger
+      if (paymentMethod == 'dine_coins' && dineCoinsUsed > 0) {
+        await _supabaseService.client
+            .from('dinecoins_ledger')
+            .insert({
+          'user_id': _supabaseService.client.auth.currentUser?.id,
+          'establishment_id': widget.establishmentId,
+          'amount': dineCoinsUsed,
+          'transaction_type': 'debit',
+          'description': 'Payment for order $orderId',
+        });
+      }
+
+      // 5. Clear cart and show success
+      _clearCart();
+
+      // 6. Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Order #${orderId.substring(0, 8)} placed successfully!'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      debugPrint('Checkout completed for table: $_resolvedTableId');
+      debugPrint('Order ID: $orderId');
+      debugPrint('Payment method: $paymentMethod');
+      debugPrint('DineCoins used: $dineCoinsUsed');
+      debugPrint('Final amount: $finalAmount');
+
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Checkout failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      debugPrint('Checkout error: $e');
+    }
+  }
+
+  // Helper method to get special instructions from cart items
+  String? _getSpecialInstructions() {
+    // Collect all special instructions from cart items
+    final instructions = _cartItems.values
+        .where((item) => item.specialInstructions != null && item.specialInstructions!.isNotEmpty)
+        .map((item) => '${item.menuItem.name}: ${item.specialInstructions}')
+        .join('\n');
+
+    return instructions.isNotEmpty ? instructions : null;
+  }
+
+  // Get user's DineCoins balance
+  Future<double> _getDineCoinsBalance() async {
+    try {
+      final userId = _supabaseService.client.auth.currentUser?.id;
+      if (userId == null) return 0.0;
+
+      final response = await _supabaseService.client
+          .from('dinecoins_ledger')
+          .select()
+          .eq('user_id', userId);
+
+      double balance = 0.0;
+      for (final record in response) {
+        final amount = (record['amount'] as num).toDouble();
+        final type = record['transaction_type'] as String;
+        if (type == 'credit') {
+          balance += amount;
+        } else if (type == 'debit') {
+          balance -= amount;
+        }
+      }
+      return balance;
+    } catch (e) {
+      debugPrint('Error getting DineCoins balance: $e');
+      return 0.0;
+    }
+  }
+
+  // Handle checkout process with enhanced confirmation dialog
   void _handleCheckout() async {
     // Ensure we have a table ID before proceeding
     if (_resolvedTableId == null) {
       await _resolveTableId();
     }
 
-    // TODO: Implement checkout logic using _resolvedTableId
-    debugPrint('Checkout for table: $_resolvedTableId');
-    debugPrint('Total items: ${_cartItems.length}');
-    debugPrint('Total amount: $_cartTotal');
+    if (_cartItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your cart is empty.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
-    // Show placeholder dialog
+    // Get DineCoins balance for payment options
+    final dineCoinsBalance = await _getDineCoinsBalance();
+    final canUseDineCoins = dineCoinsBalance > 0;
+
+    // Show enhanced confirmation dialog with payment options
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Checkout'),
-        content: Text('Proceed with checkout for table $_resolvedTableId?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              // TODO: Implement actual checkout logic
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Order placed successfully!'),
-                  backgroundColor: Color(0xFF53B175),
-                ),
-              );
-              _clearCart(); // Clear cart after successful checkout
-            },
-            child: const Text('Confirm'),
-          ),
-        ],
+      builder: (context) => CheckoutDialog(
+        tableId: _resolvedTableId,
+        cartItems: _cartItems,
+        cartTotal: _cartTotal,
+        dineCoinsBalance: dineCoinsBalance,
+        canUseDineCoins: canUseDineCoins,
+        onCheckout: _checkout,
       ),
     );
   }
@@ -193,6 +347,7 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
         onRemoveFromCart: _removeFromCart,
         onClearCart: _clearCart,
         cartTotal: _cartTotal,
+        onCheckout: _handleCheckout,
       ),
       const ProfileScreen(),
     ];
@@ -212,7 +367,7 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -314,6 +469,176 @@ class _CustomerNavigationState extends State<CustomerNavigation> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// Enhanced Checkout Dialog with payment options
+class CheckoutDialog extends StatefulWidget {
+  final String? tableId;
+  final Map<String, CartItem> cartItems;
+  final double cartTotal;
+  final double dineCoinsBalance;
+  final bool canUseDineCoins;
+  final Function({String paymentMethod, double dineCoinsUsed}) onCheckout;
+
+  const CheckoutDialog({
+    super.key,
+    required this.tableId,
+    required this.cartItems,
+    required this.cartTotal,
+    required this.dineCoinsBalance,
+    required this.canUseDineCoins,
+    required this.onCheckout,
+  });
+
+  @override
+  State<CheckoutDialog> createState() => _CheckoutDialogState();
+}
+
+class _CheckoutDialogState extends State<CheckoutDialog> {
+  String _selectedPaymentMethod = 'cash';
+  double _dineCoinsUsed = 0.0;
+  final TextEditingController _dineCoinsController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Set initial DineCoins usage to balance or total, whichever is smaller
+    _dineCoinsUsed = widget.dineCoinsBalance > widget.cartTotal
+        ? widget.cartTotal
+        : widget.dineCoinsBalance;
+    _dineCoinsController.text = _dineCoinsUsed.toStringAsFixed(0);
+  }
+
+  @override
+  void dispose() {
+    _dineCoinsController.dispose();
+    super.dispose();
+  }
+
+  void _updateDineCoinsUsed(String value) {
+    final newValue = double.tryParse(value) ?? 0.0;
+    setState(() {
+      _dineCoinsUsed = newValue.clamp(0.0,
+          widget.dineCoinsBalance > widget.cartTotal ? widget.cartTotal : widget.dineCoinsBalance);
+    });
+  }
+
+  double get _finalAmount {
+    return _selectedPaymentMethod == 'dine_coins'
+        ? widget.cartTotal - _dineCoinsUsed
+        : widget.cartTotal;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Confirm Order'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Table: ${widget.tableId ?? 'Not specified'}'),
+            const SizedBox(height: 8),
+            Text('Items: ${widget.cartItems.length}'),
+            const SizedBox(height: 8),
+            Text('Total: ${widget.cartTotal.toStringAsFixed(0)} MWK'),
+
+            if (widget.canUseDineCoins) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Payment Method',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Row(
+                children: [
+                  Radio<String>(
+                    value: 'cash',
+                    groupValue: _selectedPaymentMethod,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedPaymentMethod = value!;
+                      });
+                    },
+                  ),
+                  const Text('Cash'),
+                  const SizedBox(width: 20),
+                  Radio<String>(
+                    value: 'dine_coins',
+                    groupValue: _selectedPaymentMethod,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedPaymentMethod = value!;
+                      });
+                    },
+                  ),
+                  const Text('DineCoins'),
+                ],
+              ),
+            ],
+
+            if (_selectedPaymentMethod == 'dine_coins') ...[
+              const SizedBox(height: 8),
+              Text('Available DineCoins: ${widget.dineCoinsBalance.toStringAsFixed(0)}'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _dineCoinsController,
+                decoration: const InputDecoration(
+                  labelText: 'DineCoins to use',
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter amount',
+                ),
+                keyboardType: TextInputType.number,
+                onChanged: _updateDineCoinsUsed,
+              ),
+              const SizedBox(height: 8),
+              if (_dineCoinsUsed > widget.dineCoinsBalance)
+                Text(
+                  'Not enough DineCoins. You have ${widget.dineCoinsBalance.toStringAsFixed(0)}',
+                  style: const TextStyle(color: Colors.red),
+                ),
+            ],
+
+            if (_selectedPaymentMethod == 'dine_coins' && _dineCoinsUsed > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Final Amount to Pay: ${_finalAmount.toStringAsFixed(0)} MWK',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF53B175),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+            const Text(
+              'Are you sure you want to place this order?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            widget.onCheckout(
+              paymentMethod: _selectedPaymentMethod,
+              dineCoinsUsed: _dineCoinsUsed,
+            );
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF53B175),
+          ),
+          child: const Text('Place Order'),
+        ),
+      ],
     );
   }
 }

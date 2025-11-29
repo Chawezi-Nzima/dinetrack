@@ -141,10 +141,12 @@ class UserProfile {
 class CartItem {
   final MenuItem menuItem;
   final int quantity;
+  final String? specialInstructions;
 
   CartItem({
     required this.menuItem,
     required this.quantity,
+    this.specialInstructions,
   });
 
   double get totalPrice => menuItem.price * quantity;

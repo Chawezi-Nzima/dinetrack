@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+//import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/services/supabase_service.dart';
 import '../../../../core/models/menu_models.dart';
 
@@ -115,7 +115,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
         backgroundColor: _primaryGreen,
         actions: [
           // Cart badge in app bar
-          Stack(
+          /*Stack(
             children: [
               IconButton(
                 icon: const Icon(Icons.shopping_cart, color: Colors.white),
@@ -149,7 +149,7 @@ class _HomeCustomerState extends State<HomeCustomer> {
                   ),
                 ),
             ],
-          ),
+          ),*/
         ],
       ),
       body: SafeArea(
