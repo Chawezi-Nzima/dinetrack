@@ -1,0 +1,18 @@
+# render.yaml
+services:
+  - type: web
+    name: your-flutter-app-name # Change this to your app's name
+    env: static
+    buildCommand: |
+      # 1. Set up the Flutter SDK
+      git clone https://github.com/flutter/flutter.git --depth 1 -b stable $RENDER_CACHE_DIR/flutter
+      export PATH="$RENDER_CACHE_DIR/flutter/bin:$PATH"
+      
+      # 2. Enable Flutter web and get dependencies
+      flutter config --enable-web
+      flutter pub get
+      
+      # 3. Build the app for web
+      flutter build web --release
+    staticPublishPath: ./build/web
+    pullRequestPreviewsEnabled: false # Set to true if you want PR previews
