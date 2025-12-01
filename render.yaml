@@ -1,7 +1,7 @@
 # render.yaml
 services:
   - type: web
-    name: your-flutter-app-name # Change this to your app's name
+    name: dinetrack # Change this to your app's name
     env: static
     buildCommand: |
       # 1. Set up the Flutter SDK
