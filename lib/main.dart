@@ -27,6 +27,7 @@ class DineTrackApp extends StatelessWidget {
       ),
       home: const AuthGate(),
       debugShowCheckedModeBanner: false,
+
     );
   }
 }

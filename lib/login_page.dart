@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:dinetrack/flavors/customer/screens/registration.dart';
 
 import 'core/services/supabase_service.dart';
 
@@ -16,7 +17,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _busy = false;
   String? _errorMessage;
 
-  Future<void> _loginWithEmailPassword() async {
+  /*Future<void> _loginWithEmailPassword() async {
     setState(() {
       _busy = true;
       _errorMessage = null;
@@ -35,7 +36,72 @@ class _LoginPageState extends State<LoginPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }*/
+
+  Future<void> _loginWithEmailPassword() async {
+    setState(() {
+      _busy = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // 1. Login user
+      final response = await SupabaseService().client.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      final user = response.user;
+
+      if (user == null) {
+        setState(() => _errorMessage = "Login failed: no user returned.");
+        return;
+      }
+
+      print("LOGGED IN USER: ${user.id}");
+
+      // 2. Check if user metadata already exists
+      final existing = await SupabaseService()
+          .client
+          .from('users')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (existing == null) {
+        print("User metadata does NOT exist — inserting new row...");
+
+        // 3. Insert metadata on first login after email verification
+        final insertResponse = await SupabaseService()
+            .client
+            .from('users')
+            .insert({
+          'id': user.id,
+          'email': user.email,
+          'full_name': '', // optional: fill using saved controllers
+          'phone': '',
+          'user_type': 'customer',
+          'dine_coins_balance': 0,
+        })
+            .select()
+            .single();
+
+        print("USER METADATA INSERTED: $insertResponse");
+      } else {
+        print("User metadata already exists — skipping insert.");
+      }
+
+      // 🟢 Do NOT navigate here — AuthGate will handle routing.
+
+    } on AuthException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } catch (e) {
+      setState(() => _errorMessage = 'Login failed: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
+
 
   Future<void> _signInAsGuest() async {
     setState(() {
@@ -58,36 +124,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // Optional sign up method
-  Future<void> _signUp() async {
-    setState(() {
-      _busy = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final response = await SupabaseService().client.auth.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-        data: {
-          'user_type': 'customer', // Default role for new signups
-          'full_name': '', // Can be updated later
-        },
-      );
-
-      if (response.user != null) {
-        setState(() => _errorMessage = 'Account created successfully! You can now login.');
-      } else {
-        setState(() => _errorMessage = 'Check your email to verify your account.');
-      }
-    } on AuthException catch (e) {
-      setState(() => _errorMessage = e.message);
-    } catch (e) {
-      setState(() => _errorMessage = 'Sign up failed: $e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +235,14 @@ class _LoginPageState extends State<LoginPage> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
-                          onPressed: _busy ? null : _signUp,
+                            onPressed: _busy
+                                ? null
+                                : () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const RegisterPage()),
+                              );
+                            },
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
