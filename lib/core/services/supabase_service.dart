@@ -13,11 +13,16 @@ class SupabaseService {
   static String get supabaseAnonKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
 
-  Future<void> initialize() async {
+  /*Future<void> initialize() async {
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
     );
+  }*/
+
+  /// This is called AFTER Supabase.initialize() from main.dart
+  Future<void> postInit() async {
+    developer.log("Supabase initialized with: $supabaseUrl", name: 'SupabaseService');
   }
 
   SupabaseClient get client => Supabase.instance.client;
@@ -605,7 +610,10 @@ class SupabaseService {
   }
 
   // Storage URL helper method
-  String storagePublicUrl(String bucketName, String filePath) {
+  /*String storagePublicUrl(String bucketName, String filePath) {
     return '$supabaseUrl/storage/v1/object/public/$bucketName/$filePath';
+  }*/
+  String storagePublicUrl(String bucket, String path) {
+    return '${dotenv.env['SUPABASE_URL']}/storage/v1/object/public/$bucket/$path';
   }
 }

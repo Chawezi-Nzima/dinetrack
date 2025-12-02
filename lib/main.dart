@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'core/services/supabase_service.dart';
 import 'login_page.dart';
 import 'core/routing/role_router.dart';
@@ -8,11 +9,23 @@ import 'core/routing/role_router.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
-  await dotenv.load(fileName: ".env");
+  // Detect environment
+  const env = String.fromEnvironment(
+    'FLUTTER_ENV',
+    defaultValue: 'production',
+  );
 
-  // Initialize Supabase
-  await SupabaseService().initialize();
+  // Load correct env file
+  await dotenv.load(fileName: "assets/env/.env.$env");
+
+  // Initialize Supabase using ENV values
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+  );
+
+  // Initialize DineTrack services
+  await SupabaseService().postInit();
 
   runApp(const DineTrackApp());
 }
@@ -34,7 +47,7 @@ class DineTrackApp extends StatelessWidget {
   }
 }
 
-/// AUTH GATE — checks if user is logged in using Supabase
+/// AUTH GATE — checks Supabase session changes
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -53,7 +66,7 @@ class AuthGate extends StatelessWidget {
         final session = authState?.session;
 
         if (session == null) {
-          return const LoginPage(); // User not signed in
+          return const LoginPage();
         }
 
         return RoleBasedRouter(userId: session.user.id);
