@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: dinetrack
+    env: static
+    buildCommand: |
+      # Stop on any error
+      set -e
+
+      # 1. Install Flutter with better cache handling
+      FLUTTER_DIR="$RENDER_CACHE_DIR/flutter"
+      if [ ! -d "$FLUTTER_DIR/bin" ]; then
+        echo "Installing Flutter SDK..."
+        git clone https://github.com/flutter/flutter.git --depth 1 -b stable "$FLUTTER_DIR"
+      else
+        echo "Flutter SDK found in cache"
+      fi
+      
+      # Add Flutter to PATH
+      export PATH="$FLUTTER_DIR/bin:$PATH"
+      echo "Flutter version: $(flutter --version | head -1)"
+      
+      # 2. Cache pub dependencies for faster builds
+      PUB_CACHE="$RENDER_CACHE_DIR/.pub-cache"
+      export PUB_CACHE
+      
+      # 3. Get dependencies
+      echo "Getting dependencies..."
+      flutter pub get
+      
+      # 4. Build with verbose output
+      echo "Building web application..."
+      flutter build web --release --verbose
+      
+      echo "Build completed successfully!"
+    staticPublishPath: ./build/web

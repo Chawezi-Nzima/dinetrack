@@ -1,20 +1,28 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:developer' as developer;
 import '../models/menu_models.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
   factory SupabaseService() => _instance;
   SupabaseService._internal();
 
-  static const String supabaseUrl = 'https://xsflgrmqvnggtdggacrd.supabase.co';
-  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzZmxncm1xdm5nZ3RkZ2dhY3JkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyODQxNDMsImV4cCI6MjA3OTg2MDE0M30.Zql86YOeDJd7-chsptN3_DNNLMJLyaEY5xdGRaIQ1qs';
+  static String get supabaseUrl => dotenv.env['SUPABASE_URL'] ?? '';
+  static String get supabaseAnonKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
-  Future<void> initialize() async {
+
+  /*Future<void> initialize() async {
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
     );
+  }*/
+
+  /// This is called AFTER Supabase.initialize() from main.dart
+  Future<void> postInit() async {
+    developer.log("Supabase initialized with: $supabaseUrl", name: 'SupabaseService');
   }
 
   SupabaseClient get client => Supabase.instance.client;
@@ -602,7 +610,10 @@ class SupabaseService {
   }
 
   // Storage URL helper method
-  String storagePublicUrl(String bucketName, String filePath) {
+  /*String storagePublicUrl(String bucketName, String filePath) {
     return '$supabaseUrl/storage/v1/object/public/$bucketName/$filePath';
+  }*/
+  String storagePublicUrl(String bucket, String path) {
+    return '${dotenv.env['SUPABASE_URL']}/storage/v1/object/public/$bucket/$path';
   }
 }
