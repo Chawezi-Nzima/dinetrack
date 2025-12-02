@@ -1,3 +1,5 @@
+FROM ubuntu:22.04
+
 # Install Flutter dependencies
 RUN apt-get update && apt-get install -y \
     git \
@@ -22,10 +24,16 @@ RUN apt-get update && apt-get install -y \
 RUN git clone https://github.com/flutter/flutter.git /usr/local/flutter
 ENV PATH="/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:$PATH"
 
-# Accept Android licenses (optional if building for Android)
-RUN yes | flutter doctor --android-licenses || true
-
 # Enable Flutter web
 RUN flutter channel stable
-RUN flutter upgrade
 RUN flutter config --enable-web
+
+# Set working directory
+WORKDIR /app
+
+# Copy project files
+COPY . .
+
+# Get dependencies and build
+RUN flutter pub get
+RUN flutter build web --release
