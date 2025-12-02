@@ -27,17 +27,16 @@ RUN useradd -ms /bin/bash flutteruser
 USER flutteruser
 WORKDIR /home/flutteruser
 
-# Add Flutter to PATH
-RUN git clone https://github.com/flutter/flutter.git /home/flutteruser/flutter
+# Install Flutter (stable, no upgrade)
+RUN git clone --branch stable https://github.com/flutter/flutter.git /home/flutteruser/flutter
 ENV PATH="/home/flutteruser/flutter/bin:/home/flutteruser/flutter/bin/cache/dart-sdk/bin:$PATH"
 
 # Enable Flutter web
-RUN flutter channel stable
 RUN flutter config --enable-web
 
 # Copy project files
 COPY --chown=flutteruser:flutteruser . .
 
-# Get dependencies and build
+# Get dependencies and build Flutter web
 RUN flutter pub get
 RUN flutter build web --release
