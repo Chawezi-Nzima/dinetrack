@@ -1,6 +1,7 @@
+# Base image
 FROM ubuntu:22.04
 
-# Install Flutter dependencies
+# Install dependencies
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -18,21 +19,24 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     python3 \
     python3-pip \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone Flutter
-RUN git clone https://github.com/flutter/flutter.git /usr/local/flutter
-ENV PATH="/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:$PATH"
+# Create non-root user
+RUN useradd -ms /bin/bash flutteruser
+USER flutteruser
+WORKDIR /home/flutteruser
+
+# Add Flutter to PATH
+RUN git clone https://github.com/flutter/flutter.git /home/flutteruser/flutter
+ENV PATH="/home/flutteruser/flutter/bin:/home/flutteruser/flutter/bin/cache/dart-sdk/bin:$PATH"
 
 # Enable Flutter web
 RUN flutter channel stable
 RUN flutter config --enable-web
 
-# Set working directory
-WORKDIR /app
-
 # Copy project files
-COPY . .
+COPY --chown=flutteruser:flutteruser . .
 
 # Get dependencies and build
 RUN flutter pub get
