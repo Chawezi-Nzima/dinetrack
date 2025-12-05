@@ -8,11 +8,17 @@ environment:
   sdk: '>=3.9.2 <4.0.0'
 
 dependencies:
+
+
   flutter:
     sdk: flutter
 
+
   # Core dependencies
   cupertino_icons: ^1.0.6
+
+  universal_platform: ^1.0.0+1
+
 
   # QR Code & Image handling
   qr_flutter: ^4.1.0
@@ -22,7 +28,7 @@ dependencies:
   mobile_scanner: ^7.1.3
 
   # Supabase & Database
-  supabase_flutter: ^2.10.3
+  supabase_flutter: ^2.1.6
 
   # Navigation & Routing
   go_router: ^12.0.0
@@ -53,6 +59,8 @@ dependencies:
 
   # URL handling
   url_launcher: ^6.2.0
+
+  universal_io: ^2.2.2
 
 dev_dependencies:
   flutter_test:

@@ -1,3 +1,4 @@
+//lib/core/services/supabase_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:developer' as developer;
 import '../models/menu_models.dart';
