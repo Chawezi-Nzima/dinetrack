@@ -1,4 +1,3 @@
-//lib/core/routing/role_router.dart
 import 'package:flutter/material.dart';
 
 import '../../flavors/customer/screens/customer_navigation.dart';

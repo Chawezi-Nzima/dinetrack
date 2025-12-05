@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/services/supabase_service.dart';
 
 class SupervisorHomeScreen extends StatelessWidget {
-  const SupervisorHomeScreen({super.key});
+  final String? establishmentId;
+
+  const SupervisorHomeScreen({super.key, this.establishmentId});
 
   @override
   Widget build(BuildContext context) {

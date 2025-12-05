@@ -3,8 +3,9 @@ import '../../../../core/services/supabase_service.dart';
 import 'add_menu_item_page.dart'; // We'll create this
 
 class KitchenStaffScreen extends StatefulWidget {
-  const KitchenStaffScreen({super.key});
+  final String? establishmentId;
 
+  const KitchenStaffScreen({super.key, this.establishmentId});
   @override
   State<KitchenStaffScreen> createState() => _KitchenStaffScreenState();
 }

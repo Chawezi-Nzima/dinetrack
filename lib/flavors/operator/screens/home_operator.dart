@@ -1,12 +1,14 @@
 //lib/flavors/operator/screens/home_operator.dart
-import 'package:dinetrack/flavors/operator/screens/staff_management_view.dart';
 import 'package:flutter/material.dart';
 import 'package:dinetrack/core/services/supabase_service.dart';
 import 'qr_code_generator.dart';
 import 'dart:math';
 
 class OperatorHomeScreen extends StatefulWidget {
-  const OperatorHomeScreen({super.key});
+  final String? establishmentId;
+
+  const OperatorHomeScreen({super.key, this.establishmentId});
+
 
   @override
   State<OperatorHomeScreen> createState() => _OperatorHomeScreenState();
@@ -663,13 +665,11 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
   }
 
   Widget _buildStaffView() {
-    return StaffManagementView(
-      establishmentId: _currentEstablishmentId,
-      isDarkMode: isDarkMode,
-      onStaffAdded: () {
-        // Refresh staff list when new staff is added
-        _loadStaffData();
-      },
+    return Center(
+      child: Text(
+        'Settings',
+        style: TextStyle(fontSize: 24, color: isDarkMode ? Colors.white : Colors.black),
+      ),
     );
   }
 

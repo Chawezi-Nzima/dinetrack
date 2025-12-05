@@ -342,7 +342,14 @@ class _LandingPageState extends State<LandingPage> {
                   color: const Color(0xFF10B981),
                   onTap: () {
                     Navigator.pop(context);
-                    _navigateToAdminRegistration(context);
+
+                    // Push the LoginPage as a new route
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LoginPage(),
+                      ),
+                    );
                   },
                 ),
                 const SizedBox(height: 16),
