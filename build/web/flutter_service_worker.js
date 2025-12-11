@@ -3,8 +3,9 @@ const MANIFEST = 'flutter-app-manifest';
 const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 
-const RESOURCES = {"assets/AssetManifest.bin": "080a32b28edf19f913c1e9a416a3c017",
-"assets/AssetManifest.bin.json": "7f5937379b8eb01809aabfa240ff78d4",
+const RESOURCES = {"assets/AssetManifest.bin": "e9c4c1ddedcb96100267c8617397a4de",
+"assets/AssetManifest.bin.json": "3c345cf7faf5a1349e8531251ec3be1e",
+"assets/assets/images/delicious_food_spread.png": "a08069b0ae9272a381568dee1b901e6c",
 "assets/assets/images/dyn.jpg": "a5110ef3ee2c8b7a64c2ac04e92c356d",
 "assets/assets/images/logo.png": "fd47367ca6ad33d6bfbb494283fc6fb3",
 "assets/FontManifest.json": "dc3d03800ccca4601324923c0b1d6d57",
@@ -34,7 +35,7 @@ const RESOURCES = {"assets/AssetManifest.bin": "080a32b28edf19f913c1e9a416a3c017
 "icons/Icon-maskable-512.png": "301a7604d45b3e739efc881eb04896ea",
 "index.html": "d51365e2341b0e188b4e7be92340bfe0",
 "/": "d51365e2341b0e188b4e7be92340bfe0",
-"main.dart.js": "b37c5df130a0f132cc3e3e6b5323ed96",
+"main.dart.js": "558524cea1005993584a71e94075e792",
 "manifest.json": "50344acacb0bcf53b319bbc5fac2290b",
 "version.json": "b22efff51d82d1b6c07dce8f3563be33"};
 // The application shell files that are downloaded before a service worker can
